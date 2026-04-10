@@ -120,6 +120,9 @@ class TestAllowedHost:
         client = SafeHttpClient(session=session, config=config, limiter=limiter)
         with pytest.raises(UnexpectedHostError):
             await client.get_json(_OK_URL)
+        # The response must be released on this failure path — otherwise
+        # a connection leaks back into the pool half-read.
+        fake_response.release.assert_called_once()
 
 
 class TestContentType:

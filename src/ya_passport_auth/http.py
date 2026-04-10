@@ -234,7 +234,15 @@ class SafeHttpClient:
                 status_code=response.status,
                 endpoint=url,
             )
-        self._check_host(str(response.url))
+        # Defence-in-depth: validate the final response URL host too.
+        # ``_check_host`` can raise ``UnexpectedHostError`` here; the
+        # response must be released first to avoid leaking a connection
+        # back into the pool in a half-read state.
+        try:
+            self._check_host(str(response.url))
+        except UnexpectedHostError:
+            response.release()
+            raise
 
         if response.status == 429:
             response.release()

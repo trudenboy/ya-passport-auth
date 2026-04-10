@@ -27,12 +27,15 @@ _LOGGER_ROOT = "ya_passport_auth"
 _OAUTH_RE = re.compile(r"OAuth\s+[A-Za-z0-9._\-]{8,}")
 
 # Long runs of token-shaped characters (32+) — catches both hex tokens
-# (x_token / music_token) and base64url-ish tokens without hitting short
-# IDs, UIDs, or status codes. The character class matches the tokens
-# Passport and Music actually emit; it is deliberately broader than
-# strict hex so base64-padded values (``.``/``-``/``_``) are also
-# redacted.
-_LONG_TOKEN_RE = re.compile(r"\b[0-9a-zA-Z._\-]{32,}\b")
+# (x_token / music_token) and base64url-like tokens without hitting
+# short IDs, UIDs, or status codes. We use explicit lookarounds instead
+# of ``\b`` because ``.`` and ``-`` are non-word characters, so ``\b``
+# would fail to anchor cleanly around runs that start or end with them
+# (leaking token edges into logs). The lookarounds assert "maximal run
+# of the token class" in both directions.
+_LONG_TOKEN_RE = re.compile(
+    r"(?<![0-9A-Za-z._\-])[0-9A-Za-z._\-]{32,}(?![0-9A-Za-z._\-])",
+)
 
 # CR/LF — collapsed to a visible marker so a single log entry cannot
 # forge a second line (T12).
