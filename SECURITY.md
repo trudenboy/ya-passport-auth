@@ -23,10 +23,10 @@ within 7 days.
 |---|--------|------------|
 | T1 | Token leak via logs/tracebacks | `SecretStr` redacts repr/str; `RedactingFilter` scrubs OAuth headers and 32+ hex runs |
 | T2 | Token leak via pickling | `SecretStr.__reduce__` raises `TypeError` |
-| T3 | TLS downgrade/MITM | `verify_tls` always True; opt-in SPKI pinning |
+| T3 | TLS downgrade/MITM | `verify_tls` always True on library-owned sessions; SPKI pinning reserved for future release |
 | T4 | SSRF via open redirect | `allow_redirects=False`; host allow-list |
 | T5 | DoS via unbounded response | 1 MiB JSON cap, 2 MiB HTML cap |
-| T6 | ReDoS on CSRF regex | Anchored, non-greedy patterns; hypothesis fuzz tested |
+| T6 | ReDoS on CSRF regex | Explicit character classes, non-greedy patterns; Hypothesis fuzz tested with deadline |
 | T7 | Rate-limit ban | `AsyncMinDelayLimiter`; 429 -> `RateLimitedError` |
 | T8 | Cookie leakage | Dedicated `CookieJar` per client |
 | T9 | Supply-chain compromise | Hash-pinned lockfile, Dependabot, pip-audit |

@@ -56,6 +56,15 @@ class PassportClient:
         session: aiohttp.ClientSession | None = None,
         config: ClientConfig | None = None,
     ) -> None:
+        """Create a PassportClient.
+
+        When *session* is ``None`` (the default), an internal session
+        is created with TLS verification enabled and a dedicated cookie
+        jar.  When an external session is supplied the caller is
+        responsible for ensuring TLS verification is not disabled —
+        the library cannot enforce this on externally-created sessions.
+        Prefer :meth:`create` for the safest defaults.
+        """
         self._config = config or ClientConfig()
         self._owns_session = session is None
         if session is None:

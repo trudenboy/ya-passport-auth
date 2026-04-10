@@ -7,10 +7,11 @@ a misbehaving call site cannot weaken a security invariant for the
 whole process.
 
 TLS verification is **always on**. There is no public field, kwarg, or
-environment variable to disable it; see the threat model (T3). If a
-caller genuinely needs certificate pinning on top of the OS trust
-store, :attr:`pinned_fingerprints` provides opt-in SPKI SHA-256 pinning
-(wired into the HTTP client in a later phase).
+environment variable to disable it; see the threat model (T3).
+
+The :attr:`pinned_fingerprints` and :attr:`max_retries` fields are
+validated at construction time but not yet enforced by the HTTP
+client; they are reserved for a future release.
 """
 
 from __future__ import annotations
@@ -52,11 +53,11 @@ class ClientConfig:
     total_timeout_seconds: float = 30.0
     connect_timeout_seconds: float = 10.0
     min_request_interval_seconds: float = 0.2
-    max_retries: int = 2
+    max_retries: int = 2  # reserved for future retry policy
     qr_poll_interval_seconds: float = 2.0
     qr_poll_total_timeout_seconds: float = 120.0
     allowed_hosts: frozenset[str] = field(default=DEFAULT_ALLOWED_HOSTS)
-    pinned_fingerprints: frozenset[str] | None = None
+    pinned_fingerprints: frozenset[str] | None = None  # reserved for future SPKI pinning
 
     def __post_init__(self) -> None:
         if not self.user_agent:
