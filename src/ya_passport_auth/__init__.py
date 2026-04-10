@@ -10,10 +10,30 @@ from ya_passport_auth.credentials import (
     MemoryCredentialStore,
     SecretStr,
 )
+from ya_passport_auth.exceptions import (
+    AuthFailedError,
+    CsrfExtractionError,
+    InvalidCredentialsError,
+    NetworkError,
+    QRPendingError,
+    QRTimeoutError,
+    RateLimitedError,
+    UnexpectedHostError,
+    YaPassportError,
+)
 
 __all__ = [
+    "AuthFailedError",
     "Credentials",
+    "CsrfExtractionError",
+    "InvalidCredentialsError",
     "MemoryCredentialStore",
+    "NetworkError",
+    "QRPendingError",
+    "QRTimeoutError",
+    "RateLimitedError",
     "SecretStr",
+    "UnexpectedHostError",
+    "YaPassportError",
     "__version__",
 ]
