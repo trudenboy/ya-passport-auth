@@ -7,8 +7,8 @@ creation, QR status polling, x_token exchange, and music_token exchange.
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from http.cookies import Morsel
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import aiohttp
@@ -239,17 +239,15 @@ class TestGetXToken:
         """A cookie value containing CR/LF must never land verbatim in
         ``Ya-Client-Cookie`` — otherwise the header would be split and
         an attacker who controlled a cookie value could inject arbitrary
-        additional headers (T12)."""
-        morsel: Morsel[str] = Morsel()
-        # ``Morsel.set`` does not validate the value, so this is a
-        # faithful stand-in for a cookie that slipped CR/LF past any
-        # upstream sanitisation.
-        morsel.set(
-            "Session_id",
-            "evil\r\nX-Injected: yes",
-            "evil\r\nX-Injected: yes",
-        )
-        fake_cookies = {"Session_id": morsel}
+        additional headers (T12).
+
+        We can't stuff a CRLF value into a real ``http.cookies.Morsel``
+        on modern Python (3.13.13+ rejects control characters at
+        ``Morsel.set`` time), so we use a duck-typed stand-in — the QR
+        flow only reads ``.value`` off whatever the cookie jar yields.
+        """
+        fake_morsel = SimpleNamespace(value="evil\r\nX-Injected: yes")
+        fake_cookies = {"Session_id": fake_morsel}
 
         with (
             patch.object(
