@@ -35,8 +35,9 @@ class QuasarCsrfFetcher:
         data = await self._http.get_json(_CSRF_TOKEN_URL)
 
         if data.get("status") != "ok":
+            raw_status = data.get("status", "<missing>")
             raise CsrfExtractionError(
-                "Quasar csrf_token endpoint returned non-ok status",
+                f"Quasar csrf_token endpoint returned non-ok status: {raw_status!r}",
                 endpoint=_CSRF_TOKEN_URL,
             )
 

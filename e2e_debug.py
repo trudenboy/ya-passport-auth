@@ -108,7 +108,9 @@ async def main() -> None:
         # ── Step 6: x_token exchange ──────────────────────────────────
         print("\nSTEP 6: x_token exchange")
         filtered = session.cookie_jar.filter_cookies(URL(PASSPORT_URL))
-        cookie_str = "; ".join(f"{k}={v.value}" for k, v in filtered.items())
+        cookie_str = "; ".join(
+            f"{k}={v.value.replace(chr(13), '').replace(chr(10), '')}" for k, v in filtered.items()
+        )
         print(f"  Cookies: {list(filtered.keys())}")
 
         r6 = await session.post(
