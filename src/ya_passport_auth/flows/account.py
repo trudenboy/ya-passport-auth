@@ -50,8 +50,16 @@ class AccountInfoFetcher:
                 endpoint=_SHORT_INFO_URL,
             )
 
+        try:
+            uid = int(str(raw_uid))
+        except (ValueError, TypeError) as exc:
+            raise AuthFailedError(
+                "short_info returned non-numeric uid",
+                endpoint=_SHORT_INFO_URL,
+            ) from exc
+
         return AccountInfo(
-            uid=int(str(raw_uid)),
+            uid=uid,
             display_login=_str_or_none(data.get("display_login")),
             display_name=_str_or_none(data.get("display_name")),
             public_id=_str_or_none(data.get("public_id")),

@@ -44,8 +44,10 @@ def _sanitize_endpoint(endpoint: str | None) -> str | None:
     if endpoint is None:
         return None
     parts = urlsplit(endpoint)
-    # Drop query + fragment; keep scheme/host/path only.
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    # Drop query, fragment, and userinfo; keep scheme/host/path only.
+    host = parts.hostname or ""
+    netloc = f"{host}:{parts.port}" if parts.port else host
+    return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
 
 
 def _reject_secret_like(message: object) -> None:

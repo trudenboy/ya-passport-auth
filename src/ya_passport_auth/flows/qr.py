@@ -126,7 +126,9 @@ class QrLoginFlow:
             )
         track_id = raw_track_id.strip()
 
-        csrf_token = str(data.get("csrf_token", csrf_token))
+        raw_csrf = data.get("csrf_token")
+        if isinstance(raw_csrf, str) and raw_csrf.strip():
+            csrf_token = raw_csrf.strip()
         qr_url = f"{PASSPORT_URL}/auth/magic/code/?track_id={track_id}"
 
         _log.info("QR session created, track_id=%s", track_id)
