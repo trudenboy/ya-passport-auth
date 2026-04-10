@@ -198,6 +198,38 @@ class TestRateLimiting:
         assert len(calls) == 2
 
 
+class TestGetJsonWithHeaders:
+    async def test_returns_body_and_headers(self, client: SafeHttpClient) -> None:
+        with aioresponses() as mocked:
+            mocked.get(
+                _OK_URL,
+                status=200,
+                payload={"ok": True},
+                headers={**_JSON_HEADERS, "x-custom": "val"},
+            )
+            body, headers = await client.get_json_with_headers(_OK_URL)
+        assert body == {"ok": True}
+        assert headers.get("x-custom") == "val"
+
+    async def test_non_json_content_type_raises(self, client: SafeHttpClient) -> None:
+        with aioresponses() as mocked:
+            mocked.get(_OK_URL, status=200, body="<html>", headers=_HTML_HEADERS)
+            with pytest.raises(NetworkError, match="content-type"):
+                await client.get_json_with_headers(_OK_URL)
+
+    async def test_invalid_json_body_raises(self, client: SafeHttpClient) -> None:
+        with aioresponses() as mocked:
+            mocked.get(_OK_URL, status=200, body="not json", headers=_JSON_HEADERS)
+            with pytest.raises(NetworkError, match="invalid JSON"):
+                await client.get_json_with_headers(_OK_URL)
+
+    async def test_non_object_json_raises(self, client: SafeHttpClient) -> None:
+        with aioresponses() as mocked:
+            mocked.get(_OK_URL, status=200, body="[1]", headers=_JSON_HEADERS)
+            with pytest.raises(NetworkError, match="expected JSON object"):
+                await client.get_json_with_headers(_OK_URL)
+
+
 class TestInvalidJson:
     async def test_invalid_json_body_raises(self, client: SafeHttpClient) -> None:
         with aioresponses() as mocked:

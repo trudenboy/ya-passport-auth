@@ -91,6 +91,43 @@ class SafeHttpClient:
         """POST form data and return the parsed JSON body."""
         return await self._request_json("POST", url, headers=headers, data=data)
 
+    async def get_json_with_headers(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> tuple[dict[str, object], dict[str, str]]:
+        """GET a JSON endpoint and return ``(parsed_body, response_headers)``."""
+        response = await self._execute("GET", url, headers=headers, data=None)
+        try:
+            content_type = _content_type(response)
+            if content_type not in _JSON_CONTENT_TYPES:
+                raise NetworkError(
+                    f"unexpected content-type {content_type!r}",
+                    status_code=response.status,
+                    endpoint=url,
+                )
+            body = await self._read_capped(response, JSON_MAX_BYTES, url)
+            resp_headers = dict(response.headers)
+        finally:
+            response.release()
+
+        try:
+            parsed = json.loads(body)
+        except json.JSONDecodeError as exc:
+            raise NetworkError(
+                f"invalid JSON body: {exc}",
+                status_code=response.status,
+                endpoint=url,
+            ) from exc
+        if not isinstance(parsed, dict):
+            raise NetworkError(
+                f"expected JSON object, got {type(parsed).__name__}",
+                status_code=response.status,
+                endpoint=url,
+            )
+        return parsed, resp_headers
+
     async def get_text(
         self,
         url: str,
