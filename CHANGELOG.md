@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0-rc1] - Unreleased
+## [1.0.0-rc1] - 2026-04-10
 
 ### Changed
 
@@ -26,6 +26,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   endpoint that returns `{"status":"ok","token":"…"}`. The public
   `PassportClient.get_quasar_csrf_token()` API is unchanged.
 - `ClientConfig.allowed_hosts` gained `quasar.yandex.ru`.
+
+### Fixed
+
+- QR `password/submit` now rejects any non-`ok` status (not just `"error"`),
+  preventing misleading "missing csrf_token" errors for captcha/validation states.
+- `QuasarCsrfFetcher` error messages now include the actual status value
+  returned by the endpoint for easier diagnosis.
+- `PASSPORT_BFF_URL` added to `constants.__all__`.
+
+### Added
+
+- `.github/copilot-instructions.md` with architecture, commands, security
+  invariants, and conventions for Copilot context.
+- E2E scripts (`e2e_test.py`, `e2e_debug.py`) for live endpoint validation.
+- 201 tests, 99% branch coverage.
 
 ### Verified
 
