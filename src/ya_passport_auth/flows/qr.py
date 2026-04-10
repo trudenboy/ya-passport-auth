@@ -159,9 +159,10 @@ class QrLoginFlow:
             },
             headers=bff_headers,
         )
-        if submit_data.get("status") == "error":
+        submit_status = submit_data.get("status")
+        if isinstance(submit_status, str) and submit_status != "ok":
             raise AuthFailedError(
-                "QR session creation failed",
+                f"QR session creation failed (status={submit_status!r})",
                 endpoint=_SUBMIT_URL,
             )
 

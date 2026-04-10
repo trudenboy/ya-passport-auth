@@ -191,7 +191,27 @@ class TestGetQr:
                 payload={"status": "error", "errors": ["captcha"]},
                 headers=_JSON_CT,
             )
-            with pytest.raises(AuthFailedError):
+            with pytest.raises(AuthFailedError, match="status='error'"):
+                await flow.get_qr()
+
+    async def test_submit_unexpected_status_raises(self, flow: QrLoginFlow) -> None:
+        """Non-ok status like 'captcha' must not fall through to csrf_token check."""
+        html = (FIXTURES / "csrf_input_attr.html").read_text()
+        with aioresponses() as m:
+            m.get(_AM_URL, status=200, body=html, headers=_HTML_CT)
+            m.post(
+                _MULTISTEP_URL,
+                status=200,
+                payload={"track_id": _TEST_TRACK_ID},
+                headers=_JSON_CT,
+            )
+            m.post(
+                _SUBMIT_URL,
+                status=200,
+                payload={"status": "captcha", "captcha_url": "https://example.com/c"},
+                headers=_JSON_CT,
+            )
+            with pytest.raises(AuthFailedError, match="status='captcha'"):
                 await flow.get_qr()
 
     async def test_submit_missing_csrf_raises(self, flow: QrLoginFlow) -> None:

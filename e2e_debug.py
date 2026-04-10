@@ -44,6 +44,9 @@ async def main() -> None:
             if m and m.group(1):
                 csrf_am = m.group(1)
                 break
+        if csrf_am is None:
+            print("  [FAIL] CSRF token not found in /am page")
+            return
         print(f"  csrf_am: {csrf_am[:30]}...")
 
         # ── Step 2: multistep_start → track_id ────────────────────────
@@ -74,7 +77,7 @@ async def main() -> None:
         r3.release()
         csrf_submit = d3["csrf_token"]
         user_code = d3.get("user_code")
-        print(f"  csrf_submit: {csrf_submit}")
+        print(f"  csrf_submit: present ({len(csrf_submit)} chars)")
         print(f"  user_code: {user_code}")
 
         # ── Step 4: QR URL ────────────────────────────────────────────
@@ -124,7 +127,7 @@ async def main() -> None:
         r6.release()
         if "access_token" in d6:
             x_token = d6["access_token"]
-            print(f"  x_token: {x_token[:10]}...{x_token[-5:]}")
+            print(f"  x_token: present ({len(x_token)} chars)")
         else:
             print(f"  ERROR: {d6}")
             return
@@ -145,7 +148,7 @@ async def main() -> None:
         r7.release()
         if "access_token" in d7:
             music_token = d7["access_token"]
-            print(f"  music_token: {music_token[:10]}...{music_token[-5:]}")
+            print(f"  music_token: present ({len(music_token)} chars)")
         else:
             print(f"  ERROR: {d7}")
             return
