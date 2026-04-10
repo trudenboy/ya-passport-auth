@@ -1,6 +1,6 @@
 """Tests for the QR login flow.
 
-Covers CSRF extraction (3 pattern variants + missing), QR session
+Covers CSRF extraction (4 pattern variants + missing), QR session
 creation, QR status polling, x_token exchange, and music_token exchange.
 """
 
@@ -77,7 +77,12 @@ def flow(http: SafeHttpClient, session: aiohttp.ClientSession) -> QrLoginFlow:
 class TestCsrfExtraction:
     @pytest.mark.parametrize(
         "fixture_file",
-        ["csrf_input_attr.html", "csrf_js_single.html", "csrf_json_script.html"],
+        [
+            "csrf_input_attr.html",
+            "csrf_js_single.html",
+            "csrf_json_script.html",
+            "csrf_window_global.html",
+        ],
     )
     async def test_csrf_patterns(self, flow: QrLoginFlow, fixture_file: str) -> None:
         html = (FIXTURES / fixture_file).read_text()
