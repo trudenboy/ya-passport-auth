@@ -1,10 +1,7 @@
-"""ya-passport-auth — async Yandex Passport (mobile) auth library.
-
-Public API is populated incrementally in later tasks. Phase 0 ships only
-the package marker and version.
-"""
+"""ya-passport-auth — async Yandex Passport (mobile) auth library."""
 
 from ya_passport_auth._version import __version__
+from ya_passport_auth.client import PassportClient
 from ya_passport_auth.config import ClientConfig
 from ya_passport_auth.credentials import (
     Credentials,
@@ -22,8 +19,11 @@ from ya_passport_auth.exceptions import (
     UnexpectedHostError,
     YaPassportError,
 )
+from ya_passport_auth.flows.qr import QrSession
+from ya_passport_auth.models import AccountInfo
 
 __all__ = [
+    "AccountInfo",
     "AuthFailedError",
     "ClientConfig",
     "Credentials",
@@ -31,8 +31,10 @@ __all__ = [
     "InvalidCredentialsError",
     "MemoryCredentialStore",
     "NetworkError",
+    "PassportClient",
     "QRPendingError",
     "QRTimeoutError",
+    "QrSession",
     "RateLimitedError",
     "SecretStr",
     "UnexpectedHostError",
