@@ -132,9 +132,13 @@ select = [
     "D",    # pydocstyle
 ]
 ignore = [
-    "D203",   # one-blank-line-before-class (conflicts with D211)
-    "D213",   # multi-line-summary-second-line (conflicts with D212)
+    "D203",    # one-blank-line-before-class (conflicts with D211)
+    "D213",    # multi-line-summary-second-line (conflicts with D212)
+    "D105",    # magic-method docstrings (class docstring is enough)
+    "D107",    # __init__ docstring (class docstring is enough)
     "PLR0913", # too-many-arguments (auth flows legitimately need several)
+    "TRY003",  # long exception messages — clarity > ceremony
+    "TRY301",  # abstract `raise` to inner function — needless indirection
 ]
 
 [tool.ruff.lint.per-file-ignores]
