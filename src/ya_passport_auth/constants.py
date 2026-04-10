@@ -38,7 +38,7 @@ PASSPORT_API_URL: Final = "https://mobileproxy.passport.yandex.net"
 MUSIC_TOKEN_URL: Final = "https://oauth.mobile.yandex.net/1/token"
 
 # ------------------------------------------------------------------ #
-# CSRF extraction patterns (T6 — anchored, non-greedy, explicit classes)
+# CSRF extraction patterns (T6 — non-greedy, explicit character classes)
 # ------------------------------------------------------------------ #
 CSRF_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
     re.compile(r'"csrf_token"\s*value="([^"]+)"'),

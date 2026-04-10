@@ -60,7 +60,9 @@ class PassportSessionRefresher:
             )
 
         track_id = raw_track_id.strip()
-        passport_host = str(data.get("passport_host", PASSPORT_URL))
+        passport_host = data.get("passport_host") or PASSPORT_URL
+        if not isinstance(passport_host, str):
+            passport_host = PASSPORT_URL
         session_url = f"{passport_host}/auth/session/"
 
         _log.info("refreshing session cookies via track_id")

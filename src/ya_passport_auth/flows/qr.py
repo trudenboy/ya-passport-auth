@@ -118,13 +118,13 @@ class QrLoginFlow:
                 endpoint=_SUBMIT_URL,
             )
 
-        track_id = data.get("track_id")
-        if not track_id:
+        raw_track_id = data.get("track_id")
+        if not isinstance(raw_track_id, str) or not raw_track_id.strip():
             raise AuthFailedError(
                 "Passport response missing track_id",
                 endpoint=_SUBMIT_URL,
             )
-        track_id = str(track_id)
+        track_id = raw_track_id.strip()
 
         csrf_token = str(data.get("csrf_token", csrf_token))
         qr_url = f"{PASSPORT_URL}/auth/magic/code/?track_id={track_id}"
