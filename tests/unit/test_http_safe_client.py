@@ -23,10 +23,12 @@ following invariants:
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
 import pytest
 from aioresponses import aioresponses
+from yarl import URL
 
 from ya_passport_auth.config import ClientConfig
 from ya_passport_auth.exceptions import (
@@ -95,6 +97,29 @@ class TestAllowedHost:
             )
             with pytest.raises(NetworkError):
                 await client.get_json(_OK_URL)
+
+    async def test_response_url_host_mismatch_raises(
+        self,
+        session: aiohttp.ClientSession,
+        config: ClientConfig,
+        limiter: AsyncMinDelayLimiter,
+    ) -> None:
+        """Defence-in-depth: even if the request URL is allowed, the
+        response's final URL must ALSO be on the allow-list. Redirects
+        are disabled so this cannot happen via aiohttp in practice —
+        the second ``_check_host`` exists to protect against future
+        regressions. We exercise it by stubbing ``session.request``."""
+        fake_response = MagicMock(spec=aiohttp.ClientResponse)
+        fake_response.status = 200
+        fake_response.url = URL("https://evil.example.com/x")
+        fake_response.release = MagicMock()
+
+        stub = AsyncMock(return_value=fake_response)
+        session.request = stub  # type: ignore[method-assign]
+
+        client = SafeHttpClient(session=session, config=config, limiter=limiter)
+        with pytest.raises(UnexpectedHostError):
+            await client.get_json(_OK_URL)
 
 
 class TestContentType:

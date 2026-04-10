@@ -7,7 +7,9 @@ creation, QR status polling, x_token exchange, and music_token exchange.
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from http.cookies import Morsel
 from pathlib import Path
+from unittest.mock import patch
 
 import aiohttp
 import pytest
@@ -228,6 +230,52 @@ class TestGetXToken:
             )
             with pytest.raises(InvalidCredentialsError):
                 await flow.get_x_token()
+
+    async def test_cookie_crlf_stripped(
+        self,
+        flow: QrLoginFlow,
+        session: aiohttp.ClientSession,
+    ) -> None:
+        """A cookie value containing CR/LF must never land verbatim in
+        ``Ya-Client-Cookie`` — otherwise the header would be split and
+        an attacker who controlled a cookie value could inject arbitrary
+        additional headers (T12)."""
+        morsel: Morsel[str] = Morsel()
+        # ``Morsel.set`` does not validate the value, so this is a
+        # faithful stand-in for a cookie that slipped CR/LF past any
+        # upstream sanitisation.
+        morsel.set(
+            "Session_id",
+            "evil\r\nX-Injected: yes",
+            "evil\r\nX-Injected: yes",
+        )
+        fake_cookies = {"Session_id": morsel}
+
+        with (
+            patch.object(
+                session.cookie_jar,
+                "filter_cookies",
+                return_value=fake_cookies,
+            ),
+            aioresponses() as m,
+        ):
+            m.post(
+                _TOKEN_URL,
+                status=200,
+                payload={"access_token": _TEST_X_TOKEN},
+                headers=_JSON_CT,
+            )
+            await flow.get_x_token()
+
+            calls = m.requests[("POST", URL(_TOKEN_URL))]
+            assert len(calls) == 1
+            sent_headers = calls[0].kwargs["headers"]
+            cookie_header = sent_headers["Ya-Client-Cookie"]
+
+        assert "\r" not in cookie_header
+        assert "\n" not in cookie_header
+        # The rest of the value must be preserved — only CR/LF is removed.
+        assert "evilX-Injected: yes" in cookie_header
 
 
 # ------------------------------------------------------------------ #

@@ -53,7 +53,7 @@ _STATUS_URL = f"{PASSPORT_URL}/auth/new/magic/status/"
 _TOKEN_URL = f"{PASSPORT_API_URL}/1/bundle/oauth/token_by_sessionid"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class QrSession:
     """Opaque handle for an in-progress QR login.
 
@@ -65,6 +65,12 @@ class QrSession:
     track_id: str
     csrf_token: str
     qr_url: str
+
+    def __repr__(self) -> str:
+        # Redact ``csrf_token`` so it never leaks through logs, tracebacks,
+        # or REPL ``print`` calls. ``track_id`` and ``qr_url`` are not
+        # secrets and are useful for debugging.
+        return f"QrSession(track_id={self.track_id!r}, csrf_token='***', qr_url={self.qr_url!r})"
 
 
 def _extract_csrf(html: str) -> str:
@@ -159,7 +165,12 @@ class QrLoginFlow:
                 "no Yandex session cookies found after QR auth",
                 endpoint=_TOKEN_URL,
             )
-        cookies = "; ".join(f"{k}={v.value}" for k, v in filtered.items())
+        # Strip CR/LF from cookie values before building the header to
+        # prevent HTTP header injection (T12). Yandex cookies should
+        # never contain CRLF in practice, but trust-no-input applies.
+        cookies = "; ".join(
+            f"{k}={v.value.replace(chr(13), '').replace(chr(10), '')}" for k, v in filtered.items()
+        )
 
         data = await self._http.post_json(
             _TOKEN_URL,

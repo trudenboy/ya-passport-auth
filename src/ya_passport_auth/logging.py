@@ -26,9 +26,13 @@ _LOGGER_ROOT = "ya_passport_auth"
 # endpoints. Match a long run of token-safe characters.
 _OAUTH_RE = re.compile(r"OAuth\s+[A-Za-z0-9._\-]{8,}")
 
-# Bare hex runs of 32 characters or more — catches x_token and
-# music_token without hitting short IDs, UIDs, or status codes.
-_LONG_HEX_RE = re.compile(r"\b[0-9a-fA-F]{32,}\b")
+# Long runs of token-shaped characters (32+) — catches both hex tokens
+# (x_token / music_token) and base64url-ish tokens without hitting short
+# IDs, UIDs, or status codes. The character class matches the tokens
+# Passport and Music actually emit; it is deliberately broader than
+# strict hex so base64-padded values (``.``/``-``/``_``) are also
+# redacted.
+_LONG_TOKEN_RE = re.compile(r"\b[0-9a-zA-Z._\-]{32,}\b")
 
 # CR/LF — collapsed to a visible marker so a single log entry cannot
 # forge a second line (T12).
@@ -37,7 +41,7 @@ _CRLF_RE = re.compile(r"[\r\n]+")
 
 def _scrub(text: str) -> str:
     text = _OAUTH_RE.sub(f"OAuth {_REDACTED}", text)
-    text = _LONG_HEX_RE.sub(_REDACTED, text)
+    text = _LONG_TOKEN_RE.sub(_REDACTED, text)
     return _CRLF_RE.sub(" | ", text)
 
 
