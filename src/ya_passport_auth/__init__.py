@@ -5,6 +5,7 @@ the package marker and version.
 """
 
 from ya_passport_auth._version import __version__
+from ya_passport_auth.config import ClientConfig
 from ya_passport_auth.credentials import (
     Credentials,
     MemoryCredentialStore,
@@ -24,6 +25,7 @@ from ya_passport_auth.exceptions import (
 
 __all__ = [
     "AuthFailedError",
+    "ClientConfig",
     "Credentials",
     "CsrfExtractionError",
     "InvalidCredentialsError",
