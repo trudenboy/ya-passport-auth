@@ -13,7 +13,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Ensure deterministic builds and reproducible test environments.
   PYTHONHASHSEED: "0"
   FORCE_COLOR: "1"
   UV_NO_SYNC: "0"
@@ -109,3 +108,73 @@ jobs:
           path: coverage.xml
           if-no-files-found: error
           retention-days: 7
+
+  bandit:
+    name: Bandit (SAST)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install dev dependencies
+        run: uv sync --frozen --extra dev
+      - name: Bandit
+        run: uv run bandit -c pyproject.toml -r src -ll
+
+  pip-audit:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install dev dependencies
+        run: uv sync --frozen --extra dev
+      - name: pip-audit
+        run: uv run pip-audit
+
+  gitleaks:
+    name: Gitleaks (PR diff)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
