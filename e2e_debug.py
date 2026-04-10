@@ -47,7 +47,7 @@ async def main() -> None:
         if csrf_am is None:
             print("  [FAIL] CSRF token not found in /am page")
             return
-        print(f"  csrf_am: {csrf_am[:30]}...")
+        print(f"  csrf_am: present ({len(csrf_am)} chars)")
 
         # ── Step 2: multistep_start → track_id ────────────────────────
         print("\nSTEP 2: multistep_start")
