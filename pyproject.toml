@@ -153,6 +153,9 @@ ignore = [
 "src/ya_passport_auth/_version.py" = ["D", "UP"]
 "src/ya_passport_auth/http.py" = ["PLR2004"]  # HTTP status codes are not magic
 "src/ya_passport_auth/constants.py" = ["S105"]  # public client IDs, not secrets
+"src/ya_passport_auth/flows/quasar.py" = ["S105"]  # URL, not a password
+"e2e_test.py" = ["T20", "S101", "S105", "D", "PLR"]   # CLI script
+"e2e_debug.py" = ["T20", "S101", "S105", "D", "PLR"]  # CLI script
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

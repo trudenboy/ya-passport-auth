@@ -17,7 +17,7 @@ __all__ = ["AccountInfoFetcher"]
 
 _log = get_logger("account")
 
-_SHORT_INFO_URL = f"{PASSPORT_API_URL}/1/bundle/account/short_info/"
+_SHORT_INFO_URL = f"{PASSPORT_API_URL}/1/bundle/account/short_info/?avatar_size=islands-300"
 
 
 class AccountInfoFetcher:

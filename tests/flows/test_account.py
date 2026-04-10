@@ -16,7 +16,9 @@ from ya_passport_auth.http import SafeHttpClient
 from ya_passport_auth.models import AccountInfo
 from ya_passport_auth.rate_limit import AsyncMinDelayLimiter
 
-_SHORT_INFO_URL = "https://mobileproxy.passport.yandex.net/1/bundle/account/short_info/"
+_SHORT_INFO_URL = (
+    "https://mobileproxy.passport.yandex.net/1/bundle/account/short_info/?avatar_size=islands-300"
+)
 _JSON_CT = {"Content-Type": "application/json"}
 _TEST_X_TOKEN = "test-xtoken-abcdef0123456789"
 

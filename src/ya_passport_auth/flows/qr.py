@@ -3,11 +3,16 @@
 This module implements the core mobile Passport QR flow:
 
 1. Fetch the ``/am`` page → extract CSRF token from HTML.
-2. POST ``/registration-validations/auth/password/submit`` → get ``track_id``.
-3. Build a QR URL from ``track_id``; caller displays it.
-4. Poll ``/auth/new/magic/status/`` until ``status == "ok"``.
-5. Exchange session cookies for ``x_token``.
-6. Exchange ``x_token`` for ``music_token``.
+2. POST ``/pwl-yandex/api/passport/auth/multistep_start`` with the
+   ``X-CSRF-Token`` header → get ``track_id``.
+3. POST ``/pwl-yandex/api/passport/auth/password/submit`` with the same
+   header and ``with_code=1`` → get a per-track ``csrf_token``.
+4. Build a QR URL from ``track_id``; caller displays it.
+5. Poll ``/auth/new/magic/status/`` until ``status == "ok"`` using the
+   per-track ``csrf_token`` in the form body (legacy endpoint — still
+   live and uses the old CSRF mechanism).
+6. Exchange session cookies for ``x_token``.
+7. Exchange ``x_token`` for ``music_token``.
 
 All network I/O goes through :class:`SafeHttpClient`, so host pinning,
 size caps, rate limiting, and error wrapping are automatic.
@@ -26,6 +31,7 @@ from ya_passport_auth.constants import (
     MUSIC_CLIENT_SECRET,
     MUSIC_TOKEN_URL,
     PASSPORT_API_URL,
+    PASSPORT_BFF_URL,
     PASSPORT_CLIENT_ID,
     PASSPORT_CLIENT_SECRET,
     PASSPORT_URL,
@@ -48,9 +54,12 @@ __all__ = ["QrLoginFlow", "QrSession"]
 _log = get_logger("qr")
 
 _AM_URL = f"{PASSPORT_URL}/am?app_platform=android"
-_SUBMIT_URL = f"{PASSPORT_URL}/registration-validations/auth/password/submit"
+_MULTISTEP_URL = f"{PASSPORT_BFF_URL}/auth/multistep_start"
+_SUBMIT_URL = f"{PASSPORT_BFF_URL}/auth/password/submit"
 _STATUS_URL = f"{PASSPORT_URL}/auth/new/magic/status/"
 _TOKEN_URL = f"{PASSPORT_API_URL}/1/bundle/oauth/token_by_sessionid"
+_RETPATH = f"{PASSPORT_URL}/profile"
+_BFF_REFERER = f"{PASSPORT_URL}/pwl-yandex"
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -105,36 +114,66 @@ class QrLoginFlow:
         self._session = session
 
     async def get_qr(self) -> QrSession:
-        """Fetch CSRF → create QR auth session → return handle."""
+        """Fetch CSRF → create QR auth session → return handle.
+
+        Three HTTP steps against the Passport web BFF:
+
+        1. ``GET /am`` → scrape the page CSRF.
+        2. ``POST /pwl-yandex/api/passport/auth/multistep_start`` → create
+           a new auth track and get ``track_id``.
+        3. ``POST /pwl-yandex/api/passport/auth/password/submit`` with
+           ``with_code=1`` → convert the track into a magic-link session
+           and receive a per-track ``csrf_token`` used by the polling
+           endpoint.
+        """
         html = await self._http.get_text(_AM_URL)
-        csrf_token = _extract_csrf(html)
+        page_csrf = _extract_csrf(html)
 
-        data = await self._http.post_json(
-            _SUBMIT_URL,
-            data={
-                "csrf_token": csrf_token,
-                "retpath": "https://passport.yandex.ru/profile",
-                "with_code": 1,
-            },
+        bff_headers = {
+            "X-CSRF-Token": page_csrf,
+            "Origin": PASSPORT_URL,
+            "Referer": _BFF_REFERER,
+        }
+
+        # Step 1: start a new auth track.
+        start_data = await self._http.post_json(
+            _MULTISTEP_URL,
+            data={},
+            headers=bff_headers,
         )
-
-        if data.get("status") != "ok":
-            raise AuthFailedError(
-                "QR session creation failed",
-                endpoint=_SUBMIT_URL,
-            )
-
-        raw_track_id = data.get("track_id")
+        raw_track_id = start_data.get("track_id")
         if not isinstance(raw_track_id, str) or not raw_track_id.strip():
             raise AuthFailedError(
-                "Passport response missing track_id",
-                endpoint=_SUBMIT_URL,
+                "multistep_start response missing track_id",
+                endpoint=_MULTISTEP_URL,
             )
         track_id = raw_track_id.strip()
 
-        raw_csrf = data.get("csrf_token")
-        if isinstance(raw_csrf, str) and raw_csrf.strip():
-            csrf_token = raw_csrf.strip()
+        # Step 2: convert the track into a QR/magic-link session.
+        submit_data = await self._http.post_json(
+            _SUBMIT_URL,
+            data={
+                "track_id": track_id,
+                "with_code": "1",
+                "retpath": _RETPATH,
+            },
+            headers=bff_headers,
+        )
+        submit_status = submit_data.get("status")
+        if isinstance(submit_status, str) and submit_status != "ok":
+            raise AuthFailedError(
+                f"QR session creation failed (status={submit_status!r})",
+                endpoint=_SUBMIT_URL,
+            )
+
+        raw_csrf = submit_data.get("csrf_token")
+        if not isinstance(raw_csrf, str) or not raw_csrf.strip():
+            raise AuthFailedError(
+                "password/submit response missing csrf_token",
+                endpoint=_SUBMIT_URL,
+            )
+        csrf_token = raw_csrf.strip()
+
         qr_url = f"{PASSPORT_URL}/auth/magic/code/?track_id={track_id}"
 
         _log.info("QR session created, track_id=%s", track_id)

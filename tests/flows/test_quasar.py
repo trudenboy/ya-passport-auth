@@ -15,7 +15,7 @@ from ya_passport_auth.flows.quasar import QuasarCsrfFetcher
 from ya_passport_auth.http import SafeHttpClient
 from ya_passport_auth.rate_limit import AsyncMinDelayLimiter
 
-_QUASAR_URL = "https://iot.quasar.yandex.ru/m/v3/user/devices"
+_QUASAR_URL = "https://quasar.yandex.ru/csrf_token"
 _JSON_CT = {"Content-Type": "application/json"}
 
 
@@ -47,14 +47,25 @@ class TestQuasarCsrf:
             m.get(
                 _QUASAR_URL,
                 status=200,
-                payload={"status": "ok", "request_id": "abc123"},
-                headers={**_JSON_CT, "x-csrf-token": "test-csrf-quasar-token"},
+                payload={"status": "ok", "token": "test-csrf-quasar-token"},
+                headers=_JSON_CT,
             )
             token = await fetcher.fetch()
         assert isinstance(token, SecretStr)
         assert token.get_secret() == "test-csrf-quasar-token"
 
-    async def test_missing_header_raises(self, fetcher: QuasarCsrfFetcher) -> None:
+    async def test_non_ok_status_raises(self, fetcher: QuasarCsrfFetcher) -> None:
+        with aioresponses() as m:
+            m.get(
+                _QUASAR_URL,
+                status=200,
+                payload={"status": "error"},
+                headers=_JSON_CT,
+            )
+            with pytest.raises(CsrfExtractionError):
+                await fetcher.fetch()
+
+    async def test_missing_token_raises(self, fetcher: QuasarCsrfFetcher) -> None:
         with aioresponses() as m:
             m.get(
                 _QUASAR_URL,

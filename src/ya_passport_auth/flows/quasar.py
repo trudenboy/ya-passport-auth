@@ -15,11 +15,15 @@ __all__ = ["QuasarCsrfFetcher"]
 
 _log = get_logger("quasar")
 
-_DEVICES_URL = "https://iot.quasar.yandex.ru/m/v3/user/devices"
+# The dedicated CSRF endpoint on the Quasar web frontend. It returns
+# ``{"status": "ok", "token": "<csrf>"}`` when called with a refreshed
+# Passport session (the ``Session_id``/``sessionid2`` cookies set by
+# ``PassportSessionRefresher``).
+_CSRF_TOKEN_URL = "https://quasar.yandex.ru/csrf_token"
 
 
 class QuasarCsrfFetcher:
-    """Fetch a Quasar CSRF token from the ``x-csrf-token`` response header."""
+    """Fetch a Quasar CSRF token from the dedicated ``csrf_token`` endpoint."""
 
     __slots__ = ("_http",)
 
@@ -27,13 +31,20 @@ class QuasarCsrfFetcher:
         self._http = http
 
     async def fetch(self) -> SecretStr:
-        """GET the devices endpoint and extract the CSRF header."""
-        _data, headers = await self._http.get_json_with_headers(_DEVICES_URL)
+        """GET the CSRF endpoint and return the parsed ``token`` field."""
+        data = await self._http.get_json(_CSRF_TOKEN_URL)
 
-        csrf = headers.get("x-csrf-token")
-        if not csrf:
+        if data.get("status") != "ok":
+            raw_status = data.get("status", "<missing>")
             raise CsrfExtractionError(
-                "x-csrf-token header missing from Quasar response",
-                endpoint=_DEVICES_URL,
+                f"Quasar csrf_token endpoint returned non-ok status: {raw_status!r}",
+                endpoint=_CSRF_TOKEN_URL,
             )
-        return SecretStr(csrf)
+
+        raw_token = data.get("token")
+        if not isinstance(raw_token, str) or not raw_token.strip():
+            raise CsrfExtractionError(
+                "Quasar csrf_token response missing token field",
+                endpoint=_CSRF_TOKEN_URL,
+            )
+        return SecretStr(raw_token.strip())

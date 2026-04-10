@@ -16,6 +16,7 @@ __all__ = [
     "MUSIC_CLIENT_SECRET",
     "MUSIC_TOKEN_URL",
     "PASSPORT_API_URL",
+    "PASSPORT_BFF_URL",
     "PASSPORT_CLIENT_ID",
     "PASSPORT_CLIENT_SECRET",
     "PASSPORT_URL",
@@ -36,6 +37,11 @@ MUSIC_CLIENT_SECRET: Final = "53bc75238f0c4d08a118e51fe9203300"
 PASSPORT_URL: Final = "https://passport.yandex.ru"
 PASSPORT_API_URL: Final = "https://mobileproxy.passport.yandex.net"
 MUSIC_TOKEN_URL: Final = "https://oauth.mobile.yandex.net/1/token"
+
+# Passport web BFF — new frontend endpoints replacing the legacy
+# ``/registration-validations/`` API. Require ``X-CSRF-Token`` header
+# rather than a form field.
+PASSPORT_BFF_URL: Final = f"{PASSPORT_URL}/pwl-yandex/api/passport"
 
 # ------------------------------------------------------------------ #
 # CSRF extraction patterns (T6 — non-greedy, explicit character classes)
