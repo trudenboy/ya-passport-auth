@@ -132,7 +132,7 @@ class PassportClient:
 
         elapsed = 0.0
         while elapsed < timeout:
-            await asyncio.sleep(interval)
+            await asyncio.sleep(min(interval, timeout - elapsed))
             elapsed += interval
 
             if await self._qr.check_status(qr):
