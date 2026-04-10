@@ -98,8 +98,9 @@ enable_error_code = [
     "possibly-undefined",
 ]
 
-# Note: overrides for optional test-only deps (e.g. aioresponses) will be
-# added in Phase 2 when those imports are actually introduced.
+[[tool.mypy.overrides]]
+module = ["aioresponses", "aioresponses.*"]
+ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
 # ruff — lint + format
@@ -150,6 +151,7 @@ ignore = [
     "D",       # docstrings not required in tests
 ]
 "src/ya_passport_auth/_version.py" = ["D", "UP"]
+"src/ya_passport_auth/http.py" = ["PLR2004"]  # HTTP status codes are not magic
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
