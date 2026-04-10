@@ -46,7 +46,7 @@ jobs:
       contents: read
     steps:
       - name: Download dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -67,7 +67,7 @@ jobs:
       url: https://test.pypi.org/p/ya-passport-auth
     steps:
       - name: Download dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -88,7 +88,7 @@ jobs:
       url: https://pypi.org/p/ya-passport-auth
     steps:
       - name: Download dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -103,7 +103,7 @@ jobs:
       contents: write
     steps:
       - name: Download dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
