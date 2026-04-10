@@ -78,6 +78,26 @@ class TestQrLoginIntegration:
             assert qr.track_id == _TEST_TRACK_ID
             assert "track_id=" in qr.qr_url
 
+    async def test_poll_zero_interval_raises(self) -> None:
+        async with PassportClient.create(config=_fast_config()) as client:
+            qr = QrSession(
+                track_id=_TEST_TRACK_ID,
+                csrf_token=_TEST_CSRF,
+                qr_url="http://x",
+            )
+            with pytest.raises(ValueError, match="poll_interval must be positive"):
+                await client.poll_qr_until_confirmed(qr, poll_interval=0.0)
+
+    async def test_poll_zero_timeout_raises(self) -> None:
+        async with PassportClient.create(config=_fast_config()) as client:
+            qr = QrSession(
+                track_id=_TEST_TRACK_ID,
+                csrf_token=_TEST_CSRF,
+                qr_url="http://x",
+            )
+            with pytest.raises(ValueError, match="total_timeout must be positive"):
+                await client.poll_qr_until_confirmed(qr, total_timeout=0.0)
+
     async def test_poll_timeout(self) -> None:
         async with PassportClient.create(config=_fast_config()) as client:
             qr = QrSession(

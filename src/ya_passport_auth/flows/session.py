@@ -56,12 +56,19 @@ class PassportSessionRefresher:
                 endpoint=_AUTH_URL,
             )
 
-        track_id = data.get("track_id")
+        raw_track_id = data.get("track_id")
+        if not isinstance(raw_track_id, str) or not raw_track_id.strip():
+            raise InvalidCredentialsError(
+                "x_token auth bundle missing track_id",
+                endpoint=_AUTH_URL,
+            )
+
+        track_id = raw_track_id.strip()
         passport_host = str(data.get("passport_host", PASSPORT_URL))
         session_url = f"{passport_host}/auth/session/"
 
         _log.info("refreshing session cookies via track_id")
         await self._http.get_text(
             session_url,
-            headers={"track_id": str(track_id)},
+            headers={"track_id": track_id},
         )

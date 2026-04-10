@@ -16,7 +16,7 @@ import aiohttp
 
 from ya_passport_auth.config import ClientConfig
 from ya_passport_auth.credentials import Credentials, SecretStr
-from ya_passport_auth.exceptions import QRTimeoutError
+from ya_passport_auth.exceptions import QRTimeoutError, YaPassportError
 from ya_passport_auth.flows.account import AccountInfoFetcher
 from ya_passport_auth.flows.glagol import GlagolDeviceTokenFetcher
 from ya_passport_auth.flows.qr import QrLoginFlow, QrSession
@@ -112,8 +112,14 @@ class PassportClient:
 
         Raises :class:`QRTimeoutError` if ``total_timeout`` expires.
         """
-        interval = poll_interval or self._config.qr_poll_interval_seconds
-        timeout = total_timeout or self._config.qr_poll_total_timeout_seconds
+        interval = self._config.qr_poll_interval_seconds if poll_interval is None else poll_interval
+        timeout = (
+            self._config.qr_poll_total_timeout_seconds if total_timeout is None else total_timeout
+        )
+        if interval <= 0:
+            raise ValueError("poll_interval must be positive")
+        if timeout <= 0:
+            raise ValueError("total_timeout must be positive")
 
         elapsed = 0.0
         while elapsed < timeout:
@@ -140,7 +146,7 @@ class PassportClient:
             info = await self.fetch_account_info(x_token)
             uid = info.uid
             login = info.display_login
-        except Exception:
+        except (YaPassportError, aiohttp.ClientError, TimeoutError):
             _log.debug("account info fetch failed; continuing without metadata")
             uid = None
             login = None

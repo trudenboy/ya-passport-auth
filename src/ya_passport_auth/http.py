@@ -213,7 +213,7 @@ class SafeHttpClient:
             )
         except aiohttp.ClientError as exc:
             raise NetworkError(
-                f"{method} {url} failed: {exc}",
+                f"{method} request failed: {exc}",
                 endpoint=url,
             ) from exc
 
@@ -251,13 +251,18 @@ class SafeHttpClient:
         cap: int,
         url: str,
     ) -> bytes:
-        # Read in one shot then enforce the cap. aiohttp buffers into
-        # memory either way; we never hand out a streaming body.
-        body = await response.read()
-        if len(body) > cap:
-            raise NetworkError(
-                f"response size {len(body)} exceeds cap {cap}",
-                status_code=response.status,
-                endpoint=url,
-            )
-        return body
+        # Read incrementally so oversized responses are rejected before
+        # the entire body is buffered in memory.
+        chunks: list[bytes] = []
+        total = 0
+        async for chunk in response.content.iter_chunked(65536):
+            total += len(chunk)
+            if total > cap:
+                response.close()
+                raise NetworkError(
+                    f"response size exceeds cap {cap}",
+                    status_code=response.status,
+                    endpoint=url,
+                )
+            chunks.append(chunk)
+        return b"".join(chunks)

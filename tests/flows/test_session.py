@@ -66,6 +66,17 @@ class TestRefreshCookies:
             )
             await refresher.refresh(SecretStr(_TEST_X_TOKEN))
 
+    async def test_missing_track_id_raises(self, refresher: PassportSessionRefresher) -> None:
+        with aioresponses() as m:
+            m.post(
+                _AUTH_URL,
+                status=200,
+                payload={"status": "ok", "passport_host": "https://passport.yandex.ru"},
+                headers=_JSON_CT,
+            )
+            with pytest.raises(InvalidCredentialsError, match="missing track_id"):
+                await refresher.refresh(SecretStr(_TEST_X_TOKEN))
+
     async def test_auth_failure_raises(self, refresher: PassportSessionRefresher) -> None:
         with aioresponses() as m:
             m.post(

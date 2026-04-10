@@ -1,6 +1,9 @@
 """ya-passport-auth — async Yandex Passport (mobile) auth library."""
 
-from ya_passport_auth._version import __version__
+try:
+    from ya_passport_auth._version import __version__
+except ImportError:
+    __version__ = "0.0.0"
 from ya_passport_auth.client import PassportClient
 from ya_passport_auth.config import ClientConfig
 from ya_passport_auth.credentials import (
