@@ -41,8 +41,8 @@ def http(session: aiohttp.ClientSession, config: ClientConfig) -> SafeHttpClient
 
 
 @pytest.fixture
-def refresher(http: SafeHttpClient, session: aiohttp.ClientSession) -> PassportSessionRefresher:
-    return PassportSessionRefresher(http=http, session=session)
+def refresher(http: SafeHttpClient) -> PassportSessionRefresher:
+    return PassportSessionRefresher(http=http)
 
 
 class TestRefreshCookies:

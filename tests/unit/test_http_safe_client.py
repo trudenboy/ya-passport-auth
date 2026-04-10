@@ -144,7 +144,7 @@ class TestNetworkError:
 
 class TestSizeCaps:
     async def test_json_body_over_cap_raises(self, client: SafeHttpClient) -> None:
-        # 1 MiB + 1 byte of filler under a 1 MiB cap
+        # 1 MiB + 1 byte of filler — exceeds the 1 MiB cap
         huge = '{"x":"' + ("a" * (1024 * 1024 + 1)) + '"}'
         with aioresponses() as mocked:
             mocked.get(_OK_URL, status=200, body=huge, headers=_JSON_HEADERS)

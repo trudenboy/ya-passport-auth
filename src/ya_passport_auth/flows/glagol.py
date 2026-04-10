@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from urllib.parse import urlencode
 
 from ya_passport_auth.credentials import SecretStr
 from ya_passport_auth.exceptions import InvalidCredentialsError
@@ -34,7 +35,7 @@ class GlagolDeviceTokenFetcher:
         platform: str,
     ) -> SecretStr:
         """GET the glagol token endpoint with the music OAuth token."""
-        url = f"{_GLAGOL_URL}?device_id={device_id}&platform={platform}"
+        url = f"{_GLAGOL_URL}?{urlencode({'device_id': device_id, 'platform': platform})}"
         data = await self._http.get_json(
             url,
             headers={"Authorization": f"OAuth {music_token.get_secret()}"},

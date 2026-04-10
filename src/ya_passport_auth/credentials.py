@@ -81,7 +81,7 @@ class SecretStr:
     # ------------------------------------------------------------------ #
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, SecretStr):
-            return NotImplemented
+            return False
         return self._value == other._value
 
     def __hash__(self) -> int:

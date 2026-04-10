@@ -10,8 +10,6 @@ from ya_passport_auth.exceptions import InvalidCredentialsError
 from ya_passport_auth.logging import get_logger
 
 if TYPE_CHECKING:
-    import aiohttp
-
     from ya_passport_auth.http import SafeHttpClient
 
 __all__ = ["PassportSessionRefresher"]
@@ -31,16 +29,14 @@ class PassportSessionRefresher:
        in the session jar.
     """
 
-    __slots__ = ("_http", "_session")
+    __slots__ = ("_http",)
 
     def __init__(
         self,
         *,
         http: SafeHttpClient,
-        session: aiohttp.ClientSession,
     ) -> None:
         self._http = http
-        self._session = session
 
     async def refresh(self, x_token: SecretStr) -> None:
         """Refresh Passport session cookies from the given ``x_token``."""

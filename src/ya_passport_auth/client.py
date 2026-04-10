@@ -167,10 +167,7 @@ class PassportClient:
 
     async def refresh_passport_cookies(self, x_token: SecretStr) -> None:
         """Refresh Passport session cookies from an ``x_token``."""
-        refresher = PassportSessionRefresher(
-            http=self._http,
-            session=self._session,
-        )
+        refresher = PassportSessionRefresher(http=self._http)
         await refresher.refresh(x_token)
 
     async def get_quasar_csrf_token(self) -> SecretStr:
