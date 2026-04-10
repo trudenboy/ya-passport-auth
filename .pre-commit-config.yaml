@@ -1,0 +1,45 @@
+# Run: uv run pre-commit install
+# Full run: uv run pre-commit run --all-files
+#
+# Pre-commit hooks are a local gate. CI runs the same tools (plus more)
+# independently so a skipped or missing local hook cannot bypass the gate.
+default_language_version:
+  python: python3.12
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=200"]
+      - id: detect-private-key
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.10
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        # Keep hook fast by limiting to src; full run (src+tests) is CI-only.
+        files: ^src/
+        additional_dependencies:
+          - aiohttp>=3.10
+          - yarl>=1.12
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
