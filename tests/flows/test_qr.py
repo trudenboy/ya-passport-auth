@@ -76,15 +76,17 @@ def flow(http: SafeHttpClient, session: aiohttp.ClientSession) -> QrLoginFlow:
 # ------------------------------------------------------------------ #
 class TestCsrfExtraction:
     @pytest.mark.parametrize(
-        "fixture_file",
+        ("fixture_file", "expected_csrf"),
         [
-            "csrf_input_attr.html",
-            "csrf_js_single.html",
-            "csrf_json_script.html",
-            "csrf_window_global.html",
+            ("csrf_input_attr.html", "test-csrf-input-attr-01234567890"),
+            ("csrf_js_single.html", "test-csrf-js-single-01234567890"),
+            ("csrf_json_script.html", "test-csrf-json-script-01234567890"),
+            ("csrf_window_global.html", "test-csrf-window-global-01234567890"),
         ],
     )
-    async def test_csrf_patterns(self, flow: QrLoginFlow, fixture_file: str) -> None:
+    async def test_csrf_patterns(
+        self, flow: QrLoginFlow, fixture_file: str, expected_csrf: str
+    ) -> None:
         html = (FIXTURES / fixture_file).read_text()
         with aioresponses() as m:
             m.get(_AM_URL, status=200, body=html, headers=_HTML_CT)
@@ -99,6 +101,11 @@ class TestCsrfExtraction:
                 headers=_JSON_CT,
             )
             qr = await flow.get_qr()
+
+            # Verify the extracted CSRF was actually sent to the submit endpoint.
+            calls = m.requests[("POST", URL(_SUBMIT_URL))]
+            posted_csrf = calls[0].kwargs["data"]["csrf_token"]
+            assert posted_csrf == expected_csrf
         assert qr.track_id == _TEST_TRACK_ID
 
     async def test_csrf_missing_raises(self, flow: QrLoginFlow) -> None:

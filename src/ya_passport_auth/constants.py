@@ -44,5 +44,5 @@ CSRF_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
     re.compile(r'"csrf_token"\s*value="([^"]+)"'),
     re.compile(r"'csrf_token'\s*:\s*'([^']+)'"),
     re.compile(r'"csrf_token"\s*:\s*"([^"]+)"'),
-    re.compile(r"window\.__CSRF__\s*=\s*\"([^\"]+)\""),
+    re.compile(r'window\.__CSRF__\s*=\s*"([^"]+)"'),
 )
