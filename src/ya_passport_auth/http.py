@@ -108,7 +108,7 @@ class SafeHttpClient:
                     endpoint=url,
                 )
             body = await self._read_capped(response, JSON_MAX_BYTES, url)
-            resp_headers = dict(response.headers)
+            resp_headers = {k.lower(): v for k, v in response.headers.items()}
         finally:
             response.release()
 

@@ -118,8 +118,6 @@ class TestContentType:
 
 class TestRateLimited:
     async def test_http_429_raises_no_retry(self, client: SafeHttpClient) -> None:
-        call_count = 0
-
         with aioresponses() as mocked:
             mocked.get(
                 _OK_URL,
@@ -129,7 +127,6 @@ class TestRateLimited:
             )
             with pytest.raises(RateLimitedError) as excinfo:
                 await client.get_json(_OK_URL)
-                call_count += 1
 
         assert excinfo.value.status_code == 429
         assert excinfo.value.endpoint is not None
