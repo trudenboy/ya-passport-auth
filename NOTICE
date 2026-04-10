@@ -1,0 +1,26 @@
+ya-passport-auth
+Copyright (c) 2026 Mikhail Nevskiy
+
+This product includes software originally developed as part of the
+AlexxIT/YandexStation Home Assistant integration:
+
+    YandexStation
+    Copyright (c) 2020 AlexxIT
+    https://github.com/AlexxIT/YandexStation
+    Licensed under the MIT License
+
+Portions of the Yandex Passport mobile authentication flow — endpoint
+sequences, client_id values, request shapes, CSRF extraction patterns,
+and the x_token / music_token exchange design — were derived from that
+upstream work and re-implemented here under the MIT License with
+attribution.
+
+The original MIT License text applies to those portions. A full copy of
+the upstream license is preserved at:
+
+    https://github.com/AlexxIT/YandexStation/blob/master/LICENSE.md
+
+The public mobile OAuth client_id and client_secret values used by this
+library are well-known public values extracted long ago from official
+Yandex Android apps and are present in numerous open-source projects.
+They are treated as constants, not secrets.
