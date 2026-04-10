@@ -60,13 +60,12 @@ class PassportSessionRefresher:
             )
 
         track_id = raw_track_id.strip()
-        passport_host = data.get("passport_host") or PASSPORT_URL
-        if not isinstance(passport_host, str):
-            passport_host = PASSPORT_URL
-        session_url = f"{passport_host}/auth/session/"
 
+        # Always use the well-known session URL. The ``passport_host``
+        # field in the response body is attacker-controllable and could
+        # be used as an SSRF vector (T4) — ignore it entirely.
         _log.info("refreshing session cookies via track_id")
         await self._http.get_text(
-            session_url,
+            _SESSION_URL,
             headers={"track_id": track_id},
         )

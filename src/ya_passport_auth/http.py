@@ -136,11 +136,19 @@ class SafeHttpClient:
     ) -> str:
         """GET an HTML/text endpoint and return the body as a string."""
         response = await self._execute("GET", url, headers=headers, data=None)
+        status = response.status
         try:
             body = await self._read_capped(response, HTML_MAX_BYTES, url)
         finally:
             response.release()
-        return body.decode("utf-8", errors="replace")
+        try:
+            return body.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise NetworkError(
+                f"response is not valid UTF-8: {exc}",
+                status_code=status,
+                endpoint=url,
+            ) from exc
 
     # ------------------------------------------------------------------ #
     # Internals
@@ -226,7 +234,15 @@ class SafeHttpClient:
                 status_code=response.status,
                 endpoint=url,
             )
-        self._check_host(str(response.url))
+        # Defence-in-depth: validate the final response URL host too.
+        # ``_check_host`` can raise ``UnexpectedHostError`` here; the
+        # response must be released first to avoid leaking a connection
+        # back into the pool in a half-read state.
+        try:
+            self._check_host(str(response.url))
+        except UnexpectedHostError:
+            response.release()
+            raise
 
         if response.status == 429:
             response.release()
@@ -258,7 +274,6 @@ class SafeHttpClient:
         async for chunk in response.content.iter_chunked(65536):
             total += len(chunk)
             if total > cap:
-                response.close()
                 raise NetworkError(
                     f"response size exceeds cap {cap}",
                     status_code=response.status,

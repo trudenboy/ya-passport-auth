@@ -9,6 +9,7 @@ manage the session lifecycle explicitly via ``__aenter__``/``close``.
 from __future__ import annotations
 
 import asyncio
+import time
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
@@ -130,15 +131,15 @@ class PassportClient:
         if timeout <= 0:
             raise ValueError("total_timeout must be positive")
 
-        elapsed = 0.0
-        while elapsed < timeout:
-            sleep_dur = min(interval, timeout - elapsed)
-            await asyncio.sleep(sleep_dur)
-            elapsed += sleep_dur
-
+        deadline = time.monotonic() + timeout
+        while True:
             if await self._qr.check_status(qr):
-                _log.info("QR confirmed after %.0fs", elapsed)
+                _log.info("QR confirmed")
                 return await self.complete_qr_login(qr)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(interval, remaining))
 
         raise QRTimeoutError("QR polling timed out")
 

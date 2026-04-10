@@ -18,6 +18,7 @@ Security properties enforced here:
 from __future__ import annotations
 
 import asyncio
+import hmac
 from dataclasses import dataclass
 from typing import NoReturn, SupportsIndex
 
@@ -82,7 +83,7 @@ class SecretStr:
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, SecretStr):
             return False
-        return self._value == other._value
+        return hmac.compare_digest(self._value, other._value)
 
     def __hash__(self) -> int:
         return hash(("ya_passport_auth.SecretStr", self._value))

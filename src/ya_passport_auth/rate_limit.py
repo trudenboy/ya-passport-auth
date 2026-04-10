@@ -68,6 +68,10 @@ class AsyncMinDelayLimiter:
             if self._last is not None:
                 wait = self._min_interval - (now - self._last)
                 if wait > 0:
+                    # Reserve the slot *before* sleeping so a cancellation
+                    # during the sleep doesn't leave ``_last`` stale — the
+                    # next caller will still honour the interval we owed.
+                    self._last = now + wait
                     await self._sleep(wait)
-                    now = self._monotonic()
+                    return
             self._last = now

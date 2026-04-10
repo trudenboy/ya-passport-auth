@@ -87,3 +87,34 @@ class TestRefreshCookies:
             )
             with pytest.raises(InvalidCredentialsError):
                 await refresher.refresh(SecretStr(_TEST_X_TOKEN))
+
+    async def test_ignores_passport_host_from_response(
+        self,
+        refresher: PassportSessionRefresher,
+    ) -> None:
+        """``passport_host`` in the JSON body is attacker-controllable and
+        MUST be ignored — the refresher always hits the well-known
+        session URL (T4 / SSRF)."""
+        with aioresponses() as m:
+            m.post(
+                _AUTH_URL,
+                status=200,
+                payload={
+                    "status": "ok",
+                    # Hostile host — a naive implementation would build
+                    # ``https://evil.example.com/auth/session/`` from this.
+                    "passport_host": "https://evil.example.com",
+                    "track_id": "test-track-id",
+                },
+                headers=_JSON_CT,
+            )
+            m.get(
+                _SESSION_URL,
+                status=200,
+                body="<html>ok</html>",
+                headers=_HTML_CT,
+            )
+            # Does NOT register evil.example.com — the only way this
+            # test passes is if the refresher ignores ``passport_host``
+            # entirely and uses the constant session URL.
+            await refresher.refresh(SecretStr(_TEST_X_TOKEN))

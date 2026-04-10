@@ -105,12 +105,52 @@ class TestConcurrency:
 
         async def worker() -> None:
             await limiter.acquire()
-            stamps.append(asyncio.get_event_loop().time())
+            stamps.append(asyncio.get_running_loop().time())
 
         await asyncio.gather(worker(), worker(), worker())
         stamps.sort()
         assert stamps[1] - stamps[0] >= 0.04
         assert stamps[2] - stamps[1] >= 0.04
+
+
+class TestCancellationSafety:
+    async def test_cancelled_sleep_honours_reserved_slot(
+        self,
+        clock: FakeClock,
+    ) -> None:
+        """When a coroutine is cancelled mid-sleep, the slot it reserved
+        must still be honoured by the next caller — we don't want a
+        cancellation to "free" the slot and let the next caller squeeze
+        in under the rate limit."""
+        sleep_calls: list[float] = []
+
+        async def flaky_sleep(seconds: float) -> None:
+            sleep_calls.append(seconds)
+            if len(sleep_calls) == 1:
+                # Cancel partway: wall clock barely moved.
+                clock.now += seconds / 4
+                raise asyncio.CancelledError
+            clock.now += seconds
+
+        limiter = AsyncMinDelayLimiter(
+            min_interval_seconds=0.2,
+            monotonic=clock.monotonic,
+            sleep=flaky_sleep,
+        )
+        await limiter.acquire()
+        with pytest.raises(asyncio.CancelledError):
+            await limiter.acquire()
+        # Third acquire must still wait — the reserved slot from the
+        # cancelled caller has NOT been released. Without the slot
+        # reservation fix this call would under-wait and let a burst
+        # through.
+        await limiter.acquire()
+        # Two sleeps: the cancelled one + the one after cancellation.
+        assert len(sleep_calls) == 2
+        assert sleep_calls[0] == pytest.approx(0.2)
+        # Sleep after cancellation is positive — the fix prevented a
+        # zero-wait re-entry.
+        assert sleep_calls[1] > 0
 
 
 class TestConstruction:

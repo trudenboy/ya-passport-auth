@@ -54,6 +54,27 @@ class TestRedactingFilter:
         assert "abc123" in rendered
         assert "200" in rendered
 
+    def test_redacts_base64url_tokens_with_dots_and_dashes(
+        self,
+        captured: pytest.LogCaptureFixture,
+    ) -> None:
+        """Regression for the ``\\b``-boundary bug: tokens built from
+        base64url characters (incl. ``.`` and ``-``) must still be
+        fully redacted, including when they sit next to punctuation
+        that would otherwise defeat ``\\b`` anchoring."""
+        logger = get_logger("test")
+        # JWT-shaped token with dots — 48 chars of token class.
+        jwt_like = "eyJhbGciOi.JIUzI1NiIsInR5cCI6.IkpXVCJ9aa"
+        assert len(jwt_like) >= 32
+        _log(logger, "Authorization=Bearer %s;", jwt_like)
+        rendered = captured.records[-1].getMessage()
+        assert jwt_like not in rendered
+        # None of the dot-separated fragments should leak either.
+        assert "eyJhbGciOi" not in rendered
+        assert "JIUzI1NiIsInR5cCI6" not in rendered
+        assert "IkpXVCJ9aa" not in rendered
+        assert "***" in rendered
+
     def test_redacts_secretstr_repr(self, captured: pytest.LogCaptureFixture) -> None:
         logger = get_logger("test")
         s = SecretStr("super-secret-value")
