@@ -152,6 +152,7 @@ ignore = [
 ]
 "src/ya_passport_auth/_version.py" = ["D", "UP"]
 "src/ya_passport_auth/http.py" = ["PLR2004"]  # HTTP status codes are not magic
+"src/ya_passport_auth/constants.py" = ["S105"]  # public client IDs, not secrets
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
