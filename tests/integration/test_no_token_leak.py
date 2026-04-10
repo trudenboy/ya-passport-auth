@@ -52,10 +52,15 @@ class TestNoTokenLeakInLogs:
                     headers=_HTML_CT,
                 )
                 m.post(
-                    f"{_PASSPORT}/registration-validations/auth/password/submit",
+                    f"{_PASSPORT}/pwl-yandex/api/passport/auth/multistep_start",
+                    status=200,
+                    payload={"track_id": "track-123"},
+                    headers=_JSON_CT,
+                )
+                m.post(
+                    f"{_PASSPORT}/pwl-yandex/api/passport/auth/password/submit",
                     status=200,
                     payload={
-                        "status": "ok",
                         "track_id": "track-123",
                         "csrf_token": "csrf-tok",
                     },
@@ -77,7 +82,7 @@ class TestNoTokenLeakInLogs:
                 )
                 # account info
                 m.get(
-                    f"{_PROXY}/1/bundle/account/short_info/",
+                    f"{_PROXY}/1/bundle/account/short_info/?avatar_size=islands-300",
                     status=200,
                     payload={"uid": 1, "display_login": "u"},
                     headers=_JSON_CT,

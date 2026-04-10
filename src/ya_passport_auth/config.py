@@ -33,6 +33,7 @@ DEFAULT_ALLOWED_HOSTS: frozenset[str] = frozenset(
         "oauth.yandex.ru",
         "yandex.ru",
         "quasar.yandex.net",
+        "quasar.yandex.ru",
         "iot.quasar.yandex.ru",
     },
 )

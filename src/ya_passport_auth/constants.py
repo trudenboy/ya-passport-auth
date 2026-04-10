@@ -37,6 +37,11 @@ PASSPORT_URL: Final = "https://passport.yandex.ru"
 PASSPORT_API_URL: Final = "https://mobileproxy.passport.yandex.net"
 MUSIC_TOKEN_URL: Final = "https://oauth.mobile.yandex.net/1/token"
 
+# Passport web BFF — new frontend endpoints replacing the legacy
+# ``/registration-validations/`` API. Require ``X-CSRF-Token`` header
+# rather than a form field.
+PASSPORT_BFF_URL: Final = f"{PASSPORT_URL}/pwl-yandex/api/passport"
+
 # ------------------------------------------------------------------ #
 # CSRF extraction patterns (T6 — non-greedy, explicit character classes)
 # ------------------------------------------------------------------ #

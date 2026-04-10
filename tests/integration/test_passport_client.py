@@ -22,9 +22,11 @@ from ya_passport_auth.flows.qr import QrSession
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 
 _PASSPORT = "https://passport.yandex.ru"
+_BFF = f"{_PASSPORT}/pwl-yandex/api/passport"
 _PROXY = "https://mobileproxy.passport.yandex.net"
+_SHORT_INFO = f"{_PROXY}/1/bundle/account/short_info/?avatar_size=islands-300"
 _OAUTH = "https://oauth.mobile.yandex.net"
-_QUASAR = "https://iot.quasar.yandex.ru"
+_QUASAR = "https://quasar.yandex.ru"
 _GLAGOL = "https://quasar.yandex.net"
 _JSON_CT = {"Content-Type": "application/json"}
 _HTML_CT = {"Content-Type": "text/html; charset=utf-8"}
@@ -65,10 +67,15 @@ class TestQrLoginIntegration:
                     headers=_HTML_CT,
                 )
                 m.post(
-                    f"{_PASSPORT}/registration-validations/auth/password/submit",
+                    f"{_BFF}/auth/multistep_start",
+                    status=200,
+                    payload={"track_id": _TEST_TRACK_ID},
+                    headers=_JSON_CT,
+                )
+                m.post(
+                    f"{_BFF}/auth/password/submit",
                     status=200,
                     payload={
-                        "status": "ok",
                         "track_id": _TEST_TRACK_ID,
                         "csrf_token": _TEST_CSRF,
                     },
@@ -158,7 +165,7 @@ class TestQrLoginIntegration:
                 )
                 # account info
                 m.get(
-                    f"{_PROXY}/1/bundle/account/short_info/",
+                    _SHORT_INFO,
                     status=200,
                     payload={"uid": 99, "display_login": "poll.user"},
                     headers=_JSON_CT,
@@ -198,7 +205,7 @@ class TestCompleteQrLogin:
                 )
                 # account info
                 m.get(
-                    f"{_PROXY}/1/bundle/account/short_info/",
+                    _SHORT_INFO,
                     status=200,
                     payload={"uid": 42, "display_login": "qr.user"},
                     headers=_JSON_CT,
@@ -237,7 +244,7 @@ class TestCompleteQrLogin:
                 )
                 # account info fails
                 m.get(
-                    f"{_PROXY}/1/bundle/account/short_info/",
+                    _SHORT_INFO,
                     status=200,
                     payload={"status_code": 401},
                     headers=_JSON_CT,
@@ -278,7 +285,7 @@ class TestTokenOps:
         async with PassportClient.create(config=_fast_config()) as client:
             with aioresponses() as m:
                 m.get(
-                    f"{_PROXY}/1/bundle/account/short_info/",
+                    _SHORT_INFO,
                     status=200,
                     payload={"uid": 123, "display_login": "user"},
                     headers=_JSON_CT,
@@ -289,7 +296,7 @@ class TestTokenOps:
         async with PassportClient.create(config=_fast_config()) as client:
             with aioresponses() as m:
                 m.get(
-                    f"{_PROXY}/1/bundle/account/short_info/",
+                    _SHORT_INFO,
                     status=200,
                     payload={"status_code": 401},
                     headers=_JSON_CT,
@@ -300,7 +307,7 @@ class TestTokenOps:
         async with PassportClient.create(config=_fast_config()) as client:
             with aioresponses() as m:
                 m.get(
-                    f"{_PROXY}/1/bundle/account/short_info/",
+                    _SHORT_INFO,
                     status=200,
                     payload={
                         "uid": 777,
@@ -317,10 +324,10 @@ class TestTokenOps:
         async with PassportClient.create(config=_fast_config()) as client:
             with aioresponses() as m:
                 m.get(
-                    f"{_QUASAR}/m/v3/user/devices",
+                    f"{_QUASAR}/csrf_token",
                     status=200,
-                    payload={"status": "ok"},
-                    headers={**_JSON_CT, "x-csrf-token": "csrf-quasar-val"},
+                    payload={"status": "ok", "token": "csrf-quasar-val"},
+                    headers=_JSON_CT,
                 )
                 token = await client.get_quasar_csrf_token()
             assert token.get_secret() == "csrf-quasar-val"

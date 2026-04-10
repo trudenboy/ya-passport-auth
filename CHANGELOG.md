@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-rc1] - Unreleased
+
+### Changed
+
+- **Breaking (internal endpoints):** QR login now targets the new Passport
+  web BFF at `/pwl-yandex/api/passport/`. The flow became three steps —
+  `GET /am` (CSRF scrape) → `POST /auth/multistep_start` → `POST
+  /auth/password/submit` — with the page CSRF delivered via the
+  `X-CSRF-Token` header instead of the form body. The legacy
+  `/registration-validations/auth/password/submit` endpoint started
+  returning `403` and is no longer used.
+- `AccountInfoFetcher` now sends `?avatar_size=islands-300` to
+  `/1/bundle/account/short_info/`. Without this query parameter the
+  endpoint now responds with `{"status":"error","errors":["avatar_size.empty"]}`
+  and all user fields come back empty.
+- `QuasarCsrfFetcher` switched from the old
+  `iot.quasar.yandex.ru/m/v3/user/devices` (`x-csrf-token` response
+  header) to the dedicated `https://quasar.yandex.ru/csrf_token`
+  endpoint that returns `{"status":"ok","token":"…"}`. The public
+  `PassportClient.get_quasar_csrf_token()` API is unchanged.
+- `ClientConfig.allowed_hosts` gained `quasar.yandex.ru`.
+
+### Verified
+
+- Full end-to-end flow re-validated against a real Yandex account:
+  QR login, `validate_x_token`, `fetch_account_info`,
+  `refresh_music_token`, `refresh_passport_cookies`,
+  `get_quasar_csrf_token`, and `SecretStr`/`Credentials` invariants all
+  pass against live endpoints.
+
 ## [0.1.0] - Unreleased
 
 ### Added
