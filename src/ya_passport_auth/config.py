@@ -28,6 +28,7 @@ DEFAULT_MOBILE_UA = "com.yandex.mobile.auth.sdk/7.42.0 (Xiaomi Redmi; Android 10
 DEFAULT_ALLOWED_HOSTS: frozenset[str] = frozenset(
     {
         "passport.yandex.ru",
+        "www.yandex.ru",
         "mobileproxy.passport.yandex.net",
         "oauth.mobile.yandex.net",
         "oauth.yandex.ru",

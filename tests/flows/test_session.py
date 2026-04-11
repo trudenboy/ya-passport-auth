@@ -61,10 +61,10 @@ class TestRefreshCookies:
             m.get(
                 _SESSION_URL,
                 status=302,
-                headers={**_HTML_CT, "Location": "https://passport.yandex.ru/profile"},
+                headers={**_HTML_CT, "Location": "https://www.yandex.ru/"},
             )
             m.get(
-                "https://passport.yandex.ru/profile",
+                "https://www.yandex.ru/",
                 status=200,
                 body="<html>ok</html>",
                 headers=_HTML_CT,

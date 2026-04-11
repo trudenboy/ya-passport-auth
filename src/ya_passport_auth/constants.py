@@ -22,6 +22,7 @@ __all__ = [
     "PASSPORT_CLIENT_SECRET",
     "PASSPORT_TOKEN_BY_SESSIONID_URL",
     "PASSPORT_URL",
+    "YANDEX_WWW_URL",
 ]
 
 # ------------------------------------------------------------------ #
@@ -37,6 +38,7 @@ MUSIC_CLIENT_SECRET: Final = "53bc75238f0c4d08a118e51fe9203300"
 # Endpoints
 # ------------------------------------------------------------------ #
 PASSPORT_URL: Final = "https://passport.yandex.ru"
+YANDEX_WWW_URL: Final = "https://www.yandex.ru"
 PASSPORT_API_URL: Final = "https://mobileproxy.passport.yandex.net"
 PASSPORT_TOKEN_BY_SESSIONID_URL: Final = f"{PASSPORT_API_URL}/1/bundle/oauth/token_by_sessionid"
 MUSIC_TOKEN_URL: Final = "https://oauth.mobile.yandex.net/1/token"

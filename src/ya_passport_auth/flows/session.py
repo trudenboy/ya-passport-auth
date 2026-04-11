@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ya_passport_auth.constants import PASSPORT_API_URL, PASSPORT_URL
+from ya_passport_auth.constants import PASSPORT_API_URL, PASSPORT_URL, YANDEX_WWW_URL
 from ya_passport_auth.credentials import SecretStr
 from ya_passport_auth.exceptions import InvalidCredentialsError
 from ya_passport_auth.logging import get_logger
@@ -42,7 +42,7 @@ class PassportSessionRefresher:
         """Refresh Passport session cookies from the given ``x_token``."""
         data = await self._http.post_json(
             _AUTH_URL,
-            data={"type": "x-token", "retpath": PASSPORT_URL},
+            data={"type": "x-token", "retpath": YANDEX_WWW_URL},
             headers={"Ya-Consumer-Authorization": f"OAuth {x_token.get_secret()}"},
         )
 
