@@ -17,6 +17,7 @@ from ya_passport_auth.rate_limit import AsyncMinDelayLimiter
 
 _AUTH_URL = "https://mobileproxy.passport.yandex.net/1/bundle/auth/x_token/"
 _SESSION_URL = "https://passport.yandex.ru/auth/session/"
+_SESSION_URL_WITH_TRACK = f"{_SESSION_URL}?track_id=test-track-id"
 _JSON_CT = {"Content-Type": "application/json"}
 _HTML_CT = {"Content-Type": "text/html; charset=utf-8"}
 _TEST_X_TOKEN = "test-xtoken-0123456789abcdef"
@@ -59,7 +60,7 @@ class TestRefreshCookies:
                 headers=_JSON_CT,
             )
             m.get(
-                _SESSION_URL,
+                _SESSION_URL_WITH_TRACK,
                 status=302,
                 headers={**_HTML_CT, "Location": "https://www.yandex.ru/"},
             )
@@ -85,7 +86,7 @@ class TestRefreshCookies:
                 headers=_JSON_CT,
             )
             m.get(
-                _SESSION_URL,
+                _SESSION_URL_WITH_TRACK,
                 status=200,
                 body="<html>ok</html>",
                 headers=_HTML_CT,
@@ -135,7 +136,7 @@ class TestRefreshCookies:
                 headers=_JSON_CT,
             )
             m.get(
-                _SESSION_URL,
+                _SESSION_URL_WITH_TRACK,
                 status=200,
                 body="<html>ok</html>",
                 headers=_HTML_CT,

@@ -68,6 +68,5 @@ class PassportSessionRefresher:
         # (e.g. .yandex.ru) — required for Quasar IoT endpoints.
         _log.info("refreshing session cookies via track_id")
         await self._http.get_text_follow_redirects(
-            _SESSION_URL,
-            headers={"track_id": track_id},
+            f"{_SESSION_URL}?track_id={track_id}",
         )

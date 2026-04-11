@@ -362,7 +362,7 @@ class TestTokenOps:
                     headers=_JSON_CT,
                 )
                 m.get(
-                    f"{_PASSPORT}/auth/session/",
+                    f"{_PASSPORT}/auth/session/?track_id=t123",
                     status=200,
                     body="<html>ok</html>",
                     headers=_HTML_CT,
