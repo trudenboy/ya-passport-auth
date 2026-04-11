@@ -20,7 +20,6 @@ __all__ = [
     "PASSPORT_BFF_URL",
     "PASSPORT_CLIENT_ID",
     "PASSPORT_CLIENT_SECRET",
-    "PASSPORT_LEGACY_URL",
     "PASSPORT_URL",
 ]
 
@@ -44,11 +43,6 @@ MUSIC_TOKEN_URL: Final = "https://oauth.mobile.yandex.net/1/token"
 # ``/registration-validations/`` API. Require ``X-CSRF-Token`` header
 # rather than a form field.
 PASSPORT_BFF_URL: Final = f"{PASSPORT_URL}/pwl-yandex/api/passport"
-
-# Legacy ``/registration-validations/`` prefix — used by the password,
-# SMS, magic-link, and captcha flows. Different from the BFF endpoints
-# that replaced only the QR auth path.
-PASSPORT_LEGACY_URL: Final = f"{PASSPORT_URL}/registration-validations"
 
 # ------------------------------------------------------------------ #
 # CSRF extraction patterns (T6 — non-greedy, explicit character classes)

@@ -28,13 +28,10 @@ from urllib.parse import urlsplit, urlunsplit
 from ya_passport_auth.credentials import Credentials, SecretStr
 
 __all__ = [
-    "AccountNotFoundError",
     "AuthFailedError",
-    "CaptchaRequiredError",
     "CsrfExtractionError",
     "InvalidCredentialsError",
     "NetworkError",
-    "PasswordError",
     "QRPendingError",
     "QRTimeoutError",
     "RateLimitedError",
@@ -117,15 +114,3 @@ class QRPendingError(AuthFailedError):
 
 class QRTimeoutError(AuthFailedError):
     """QR polling loop expired without confirmation."""
-
-
-class AccountNotFoundError(AuthFailedError):
-    """The login/username does not exist (account can only be registered)."""
-
-
-class PasswordError(AuthFailedError):
-    """Password was rejected (wrong password, expired OTP, etc.)."""
-
-
-class CaptchaRequiredError(AuthFailedError):
-    """Server requires CAPTCHA before proceeding."""

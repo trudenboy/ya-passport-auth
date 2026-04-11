@@ -12,13 +12,10 @@ from ya_passport_auth.credentials import (
     SecretStr,
 )
 from ya_passport_auth.exceptions import (
-    AccountNotFoundError,
     AuthFailedError,
-    CaptchaRequiredError,
     CsrfExtractionError,
     InvalidCredentialsError,
     NetworkError,
-    PasswordError,
     QRPendingError,
     QRTimeoutError,
     RateLimitedError,
@@ -26,15 +23,11 @@ from ya_passport_auth.exceptions import (
     YaPassportError,
 )
 from ya_passport_auth.flows.qr import QrSession
-from ya_passport_auth.models import AccountInfo, AuthSession, CaptchaChallenge
+from ya_passport_auth.models import AccountInfo
 
 __all__ = [
     "AccountInfo",
-    "AccountNotFoundError",
     "AuthFailedError",
-    "AuthSession",
-    "CaptchaChallenge",
-    "CaptchaRequiredError",
     "ClientConfig",
     "Credentials",
     "CsrfExtractionError",
@@ -42,7 +35,6 @@ __all__ = [
     "MemoryCredentialStore",
     "NetworkError",
     "PassportClient",
-    "PasswordError",
     "QRPendingError",
     "QRTimeoutError",
     "QrSession",

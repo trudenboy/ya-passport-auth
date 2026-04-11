@@ -45,14 +45,10 @@ PassportClient.poll_qr_until_confirmed
   → returns Credentials
 ```
 
-Flow call graph (password / SMS / magic link):
+Flow call graph (cookie login):
 
 ```
-PassportClient.start_password_auth → AuthSession
-PassportClient.login_password      → submit_password → _complete_auth → Credentials
-PassportClient.login_sms           → submit_sms → _complete_auth → Credentials
-PassportClient.poll_magic_link     → check_magic_link (poll) → _complete_auth → Credentials
-PassportClient.login_cookies       → CookieLoginFlow.login → _complete_auth → Credentials
+PassportClient.login_cookies → CookieLoginFlow.login → x_token → music_token → Credentials
 ```
 
 ## Security Invariants
