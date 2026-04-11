@@ -23,24 +23,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from yarl import URL
-
 from ya_passport_auth.constants import (
     CSRF_PATTERNS,
-    MUSIC_CLIENT_ID,
-    MUSIC_CLIENT_SECRET,
-    MUSIC_TOKEN_URL,
-    PASSPORT_API_URL,
     PASSPORT_BFF_URL,
-    PASSPORT_CLIENT_ID,
-    PASSPORT_CLIENT_SECRET,
     PASSPORT_URL,
 )
 from ya_passport_auth.credentials import SecretStr
 from ya_passport_auth.exceptions import (
     AuthFailedError,
     CsrfExtractionError,
-    InvalidCredentialsError,
+)
+from ya_passport_auth.flows._token_exchange import (
+    exchange_cookies_for_x_token,
+    exchange_x_token_for_music_token,
 )
 from ya_passport_auth.logging import get_logger
 
@@ -57,7 +52,6 @@ _AM_URL = f"{PASSPORT_URL}/am?app_platform=android"
 _MULTISTEP_URL = f"{PASSPORT_BFF_URL}/auth/multistep_start"
 _SUBMIT_URL = f"{PASSPORT_BFF_URL}/auth/password/submit"
 _STATUS_URL = f"{PASSPORT_URL}/auth/new/magic/status/"
-_TOKEN_URL = f"{PASSPORT_API_URL}/1/bundle/oauth/token_by_sessionid"
 _RETPATH = f"{PASSPORT_URL}/profile"
 _BFF_REFERER = f"{PASSPORT_URL}/pwl-yandex"
 
@@ -197,54 +191,8 @@ class QrLoginFlow:
         Must be called after a successful QR confirmation — the
         cookies live in the session's cookie jar.
         """
-        passport_url = URL(PASSPORT_URL)
-        filtered = self._session.cookie_jar.filter_cookies(passport_url)
-        if not filtered:
-            raise InvalidCredentialsError(
-                "no Yandex session cookies found after QR auth",
-                endpoint=_TOKEN_URL,
-            )
-        # Strip CR/LF from cookie values before building the header to
-        # prevent HTTP header injection (T12). Yandex cookies should
-        # never contain CRLF in practice, but trust-no-input applies.
-        cookies = "; ".join(
-            f"{k}={v.value.replace(chr(13), '').replace(chr(10), '')}" for k, v in filtered.items()
-        )
-
-        data = await self._http.post_json(
-            _TOKEN_URL,
-            data={
-                "client_id": PASSPORT_CLIENT_ID,
-                "client_secret": PASSPORT_CLIENT_SECRET,
-            },
-            headers={
-                "Ya-Client-Host": "passport.yandex.ru",
-                "Ya-Client-Cookie": cookies,
-            },
-        )
-
-        if "access_token" not in data:
-            raise InvalidCredentialsError(
-                "failed to exchange session for x_token",
-                endpoint=_TOKEN_URL,
-            )
-        return SecretStr(str(data["access_token"]))
+        return await exchange_cookies_for_x_token(self._http, self._session)
 
     async def get_music_token(self, x_token: SecretStr) -> SecretStr:
         """Exchange an ``x_token`` for a music-scoped OAuth token."""
-        data = await self._http.post_json(
-            MUSIC_TOKEN_URL,
-            data={
-                "client_id": MUSIC_CLIENT_ID,
-                "client_secret": MUSIC_CLIENT_SECRET,
-                "grant_type": "x-token",
-                "access_token": x_token.get_secret(),
-            },
-        )
-
-        if "access_token" not in data:
-            raise InvalidCredentialsError(
-                "failed to obtain music token from x_token",
-                endpoint=MUSIC_TOKEN_URL,
-            )
-        return SecretStr(str(data["access_token"]))
+        return await exchange_x_token_for_music_token(self._http, x_token)

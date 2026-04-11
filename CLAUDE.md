@@ -50,10 +50,33 @@ Flow call graph for QR login:
 PassportClient.poll_qr_until_confirmed
   → QrLoginFlow.get_qr          (CSRF extract → submit → QrSession)
   → QrLoginFlow.check_status    (poll loop)
-  → QrLoginFlow.get_x_token     (session cookies → x_token)
-  → QrLoginFlow.get_music_token (x_token → music_token)
-  → AccountInfoFetcher.fetch    (x_token → uid/login, graceful failure)
+  → _complete_auth               (shared token exchange)
+    → exchange_cookies_for_x_token  (session cookies → x_token)
+    → exchange_x_token_for_music_token (x_token → music_token)
+    → AccountInfoFetcher.fetch    (x_token → uid/login, graceful failure)
   → returns Credentials
+```
+
+Flow call graph for password login:
+```
+PassportClient.start_password_auth
+  → PasswordLoginFlow.start_auth  (CSRF extract → multi_step/start → AuthSession)
+
+PassportClient.login_password
+  → PasswordLoginFlow.submit_password (track_id + password → cookies in jar)
+  → _complete_auth → Credentials
+
+PassportClient.login_sms
+  → PasswordLoginFlow.submit_sms  (verify code + commit → cookies in jar)
+  → _complete_auth → Credentials
+
+PassportClient.poll_magic_link
+  → PasswordLoginFlow.check_magic_link (poll loop → cookies in jar)
+  → _complete_auth → Credentials
+
+PassportClient.login_cookies
+  → CookieLoginFlow.login        (raw cookies → x_token)
+  → exchange_x_token_for_music_token → Credentials
 ```
 
 **Security invariants** (see SECURITY.md for full threat model T1-T14):

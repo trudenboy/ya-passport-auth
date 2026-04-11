@@ -38,10 +38,21 @@ Flow call graph (QR login):
 PassportClient.poll_qr_until_confirmed
   → QrLoginFlow.get_qr          (CSRF extract → submit → QrSession)
   → QrLoginFlow.check_status    (poll loop)
-  → QrLoginFlow.get_x_token     (session cookies → x_token)
-  → QrLoginFlow.get_music_token (x_token → music_token)
-  → AccountInfoFetcher.fetch    (x_token → uid/login, graceful failure)
+  → _complete_auth               (shared token exchange)
+    → exchange_cookies_for_x_token  (session cookies → x_token)
+    → exchange_x_token_for_music_token (x_token → music_token)
+    → AccountInfoFetcher.fetch    (x_token → uid/login, graceful failure)
   → returns Credentials
+```
+
+Flow call graph (password / SMS / magic link):
+
+```
+PassportClient.start_password_auth → AuthSession
+PassportClient.login_password      → submit_password → _complete_auth → Credentials
+PassportClient.login_sms           → submit_sms → _complete_auth → Credentials
+PassportClient.poll_magic_link     → check_magic_link (poll) → _complete_auth → Credentials
+PassportClient.login_cookies       → CookieLoginFlow.login → Credentials
 ```
 
 ## Security Invariants
