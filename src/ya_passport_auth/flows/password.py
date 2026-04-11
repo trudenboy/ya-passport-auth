@@ -269,15 +269,20 @@ class PasswordLoginFlow:
             },
         )
         status = data.get("status")
+        if not isinstance(status, str):
+            raise AuthFailedError(
+                "magic link check response missing or invalid status",
+                endpoint=_MAGIC_STATUS_URL,
+            )
         if status == "magic_link_confirmed":
             _log.info("magic link confirmed for track_id=%s", auth.track_id)
             return True
-        if isinstance(status, str) and status not in ("PENDING", "pending"):
-            raise AuthFailedError(
-                f"magic link check failed (status={status!r})",
-                endpoint=_MAGIC_STATUS_URL,
-            )
-        return False
+        if status in ("PENDING", "pending"):
+            return False
+        raise AuthFailedError(
+            f"magic link check failed (status={status!r})",
+            endpoint=_MAGIC_STATUS_URL,
+        )
 
     async def get_captcha(self, auth: AuthSession) -> CaptchaChallenge:
         """Fetch a CAPTCHA image that must be solved before retrying auth."""
