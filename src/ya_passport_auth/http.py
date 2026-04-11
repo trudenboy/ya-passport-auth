@@ -357,7 +357,13 @@ class SafeHttpClient:
         return response
 
     def _check_host(self, url: str) -> None:
-        host = URL(url).host
+        parsed = URL(url)
+        if parsed.scheme != "https":
+            raise UnexpectedHostError(
+                f"non-HTTPS scheme {parsed.scheme!r} is not allowed",
+                endpoint=url,
+            )
+        host = parsed.host
         if host is None or host not in self._config.allowed_hosts:
             raise UnexpectedHostError(
                 f"host {host!r} is not in the allow-list",

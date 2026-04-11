@@ -45,9 +45,11 @@ def _extract_cookie_header(session: aiohttp.ClientSession) -> str:
             "no Yandex session cookies found",
             endpoint=PASSPORT_TOKEN_BY_SESSIONID_URL,
         )
-    return "; ".join(
-        f"{k}={v.value.replace(chr(13), '').replace(chr(10), '')}" for k, v in filtered.items()
-    )
+
+    def _sanitize(val: str) -> str:
+        return val.replace(chr(13), "").replace(chr(10), "")
+
+    return "; ".join(f"{k}={_sanitize(v.value)}" for k, v in filtered.items())
 
 
 async def exchange_cookies_for_x_token(

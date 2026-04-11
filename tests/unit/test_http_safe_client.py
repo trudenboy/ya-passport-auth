@@ -330,6 +330,17 @@ class TestFollowRedirects:
             with pytest.raises(UnexpectedHostError):
                 await client.get_text_follow_redirects(_OK_URL)
 
+    async def test_redirect_to_http_raises(self, client: SafeHttpClient) -> None:
+        """Protocol downgrade via ``http://`` Location must be rejected."""
+        with aioresponses() as m:
+            m.get(
+                _OK_URL,
+                status=302,
+                headers={"Location": "http://yandex.ru/cleartext"},
+            )
+            with pytest.raises(UnexpectedHostError, match="non-HTTPS"):
+                await client.get_text_follow_redirects(_OK_URL)
+
     async def test_too_many_redirects_raises(self, client: SafeHttpClient) -> None:
         """Redirect loop is capped."""
         with aioresponses() as m:
