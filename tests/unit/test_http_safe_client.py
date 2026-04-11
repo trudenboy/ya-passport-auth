@@ -352,6 +352,20 @@ class TestFollowRedirects:
             with pytest.raises(RateLimitedError):
                 await client.get_text_follow_redirects(_OK_URL)
 
+    async def test_4xx_raises_network_error(self, client: SafeHttpClient) -> None:
+        with aioresponses() as m:
+            m.get(_OK_URL, status=403)
+            with pytest.raises(NetworkError, match="HTTP 403"):
+                await client.get_text_follow_redirects(_OK_URL)
+
+    async def test_5xx_raises_network_error(self, client: SafeHttpClient) -> None:
+        hop = "https://yandex.ru/broken"
+        with aioresponses() as m:
+            m.get(_OK_URL, status=302, headers={"Location": hop})
+            m.get(hop, status=500)
+            with pytest.raises(NetworkError, match="HTTP 500"):
+                await client.get_text_follow_redirects(_OK_URL)
+
     async def test_relative_redirect_resolved(self, client: SafeHttpClient) -> None:
         with aioresponses() as m:
             m.get(_OK_URL, status=302, headers={"Location": "/other"})

@@ -10,14 +10,14 @@ from aioresponses import aioresponses
 from yarl import URL
 
 from ya_passport_auth.config import ClientConfig
-from ya_passport_auth.constants import PASSPORT_API_URL
+from ya_passport_auth.constants import PASSPORT_TOKEN_BY_SESSIONID_URL
 from ya_passport_auth.credentials import SecretStr
 from ya_passport_auth.exceptions import InvalidCredentialsError
 from ya_passport_auth.flows.cookie_login import CookieLoginFlow
 from ya_passport_auth.http import SafeHttpClient
 from ya_passport_auth.rate_limit import AsyncMinDelayLimiter
 
-_TOKEN_URL = f"{PASSPORT_API_URL}/1/bundle/oauth/token_by_sessionid"
+_TOKEN_URL = PASSPORT_TOKEN_BY_SESSIONID_URL
 _TEST_X_TOKEN = "test-xtoken-cookies-0123456789"
 _JSON_CT = {"Content-Type": "application/json"}
 

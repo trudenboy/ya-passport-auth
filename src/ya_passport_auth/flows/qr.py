@@ -28,14 +28,9 @@ from ya_passport_auth.constants import (
     PASSPORT_BFF_URL,
     PASSPORT_URL,
 )
-from ya_passport_auth.credentials import SecretStr
 from ya_passport_auth.exceptions import (
     AuthFailedError,
     CsrfExtractionError,
-)
-from ya_passport_auth.flows._token_exchange import (
-    exchange_cookies_for_x_token,
-    exchange_x_token_for_music_token,
 )
 from ya_passport_auth.logging import get_logger
 
@@ -184,15 +179,3 @@ class QrLoginFlow:
             data={"csrf_token": qr.csrf_token, "track_id": qr.track_id},
         )
         return bool(data.get("status") == "ok")
-
-    async def get_x_token(self) -> SecretStr:
-        """Exchange session cookies for an ``x_token``.
-
-        Must be called after a successful QR confirmation — the
-        cookies live in the session's cookie jar.
-        """
-        return await exchange_cookies_for_x_token(self._http, self._session)
-
-    async def get_music_token(self, x_token: SecretStr) -> SecretStr:
-        """Exchange an ``x_token`` for a music-scoped OAuth token."""
-        return await exchange_x_token_for_music_token(self._http, x_token)

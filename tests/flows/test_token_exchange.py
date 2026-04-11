@@ -12,7 +12,11 @@ from aioresponses import aioresponses
 from yarl import URL
 
 from ya_passport_auth.config import ClientConfig
-from ya_passport_auth.constants import MUSIC_TOKEN_URL, PASSPORT_API_URL, PASSPORT_URL
+from ya_passport_auth.constants import (
+    MUSIC_TOKEN_URL,
+    PASSPORT_TOKEN_BY_SESSIONID_URL,
+    PASSPORT_URL,
+)
 from ya_passport_auth.credentials import SecretStr
 from ya_passport_auth.exceptions import InvalidCredentialsError
 from ya_passport_auth.flows._token_exchange import (
@@ -22,7 +26,7 @@ from ya_passport_auth.flows._token_exchange import (
 from ya_passport_auth.http import SafeHttpClient
 from ya_passport_auth.rate_limit import AsyncMinDelayLimiter
 
-_TOKEN_URL = f"{PASSPORT_API_URL}/1/bundle/oauth/token_by_sessionid"
+_TOKEN_URL = PASSPORT_TOKEN_BY_SESSIONID_URL
 _TEST_X_TOKEN = "test-xtoken-0123456789abcdef"
 _TEST_MUSIC_TOKEN = "test-musictoken-fedcba9876543210"
 _JSON_CT = {"Content-Type": "application/json"}

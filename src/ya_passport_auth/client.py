@@ -168,22 +168,7 @@ class PassportClient:
         flow = CookieLoginFlow(http=self._http)
         x_token = await flow.login(cookies)
         music_token = await exchange_x_token_for_music_token(self._http, x_token)
-
-        try:
-            info = await self.fetch_account_info(x_token)
-            uid = info.uid
-            login = info.display_login
-        except (YaPassportError, aiohttp.ClientError, TimeoutError):
-            _log.debug("account info fetch failed; continuing without metadata")
-            uid = None
-            login = None
-
-        return Credentials(
-            x_token=x_token,
-            music_token=music_token,
-            uid=uid,
-            display_login=login,
-        )
+        return await self._build_credentials(x_token, music_token)
 
     # ------------------------------------------------------------------ #
     # Token ops
@@ -239,7 +224,14 @@ class PassportClient:
         """
         x_token = await exchange_cookies_for_x_token(self._http, self._session)
         music_token = await exchange_x_token_for_music_token(self._http, x_token)
+        return await self._build_credentials(x_token, music_token)
 
+    async def _build_credentials(
+        self,
+        x_token: SecretStr,
+        music_token: SecretStr,
+    ) -> Credentials:
+        """Fetch optional account info and assemble :class:`Credentials`."""
         try:
             info = await self.fetch_account_info(x_token)
             uid = info.uid

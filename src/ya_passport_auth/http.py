@@ -226,6 +226,14 @@ class SafeHttpClient:
                     endpoint=current_url,
                 )
 
+            if response.status >= 400:
+                response.release()
+                raise NetworkError(
+                    f"HTTP {response.status} from redirect chain",
+                    status_code=response.status,
+                    endpoint=current_url,
+                )
+
             status = response.status
             try:
                 body = await self._read_capped(response, HTML_MAX_BYTES, current_url)

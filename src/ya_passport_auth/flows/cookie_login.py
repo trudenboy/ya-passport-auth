@@ -10,9 +10,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ya_passport_auth.constants import (
-    PASSPORT_API_URL,
     PASSPORT_CLIENT_ID,
     PASSPORT_CLIENT_SECRET,
+    PASSPORT_TOKEN_BY_SESSIONID_URL,
 )
 from ya_passport_auth.credentials import SecretStr
 from ya_passport_auth.exceptions import InvalidCredentialsError
@@ -24,8 +24,6 @@ if TYPE_CHECKING:
 __all__ = ["CookieLoginFlow"]
 
 _log = get_logger("cookie_login")
-
-_TOKEN_URL = f"{PASSPORT_API_URL}/1/bundle/oauth/token_by_sessionid"
 
 
 class CookieLoginFlow:
@@ -48,13 +46,13 @@ class CookieLoginFlow:
         if not cookies or not cookies.strip():
             raise InvalidCredentialsError(
                 "cookie string is empty",
-                endpoint=_TOKEN_URL,
+                endpoint=PASSPORT_TOKEN_BY_SESSIONID_URL,
             )
 
         sanitized = cookies.strip().replace("\r", "").replace("\n", "")
 
         data = await self._http.post_json(
-            _TOKEN_URL,
+            PASSPORT_TOKEN_BY_SESSIONID_URL,
             data={
                 "client_id": PASSPORT_CLIENT_ID,
                 "client_secret": PASSPORT_CLIENT_SECRET,
@@ -68,7 +66,7 @@ class CookieLoginFlow:
         if "access_token" not in data:
             raise InvalidCredentialsError(
                 "failed to exchange cookies for x_token",
-                endpoint=_TOKEN_URL,
+                endpoint=PASSPORT_TOKEN_BY_SESSIONID_URL,
             )
         _log.info("cookies exchanged for x_token")
         return SecretStr(str(data["access_token"]))

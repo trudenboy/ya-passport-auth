@@ -14,9 +14,9 @@ from ya_passport_auth.constants import (
     MUSIC_CLIENT_ID,
     MUSIC_CLIENT_SECRET,
     MUSIC_TOKEN_URL,
-    PASSPORT_API_URL,
     PASSPORT_CLIENT_ID,
     PASSPORT_CLIENT_SECRET,
+    PASSPORT_TOKEN_BY_SESSIONID_URL,
     PASSPORT_URL,
 )
 from ya_passport_auth.credentials import SecretStr
@@ -32,8 +32,6 @@ __all__ = ["exchange_cookies_for_x_token", "exchange_x_token_for_music_token"]
 
 _log = get_logger("token_exchange")
 
-_TOKEN_URL = f"{PASSPORT_API_URL}/1/bundle/oauth/token_by_sessionid"
-
 
 def _extract_cookie_header(session: aiohttp.ClientSession) -> str:
     """Build ``Ya-Client-Cookie`` value from the session's cookie jar.
@@ -45,7 +43,7 @@ def _extract_cookie_header(session: aiohttp.ClientSession) -> str:
     if not filtered:
         raise InvalidCredentialsError(
             "no Yandex session cookies found",
-            endpoint=_TOKEN_URL,
+            endpoint=PASSPORT_TOKEN_BY_SESSIONID_URL,
         )
     return "; ".join(
         f"{k}={v.value.replace(chr(13), '').replace(chr(10), '')}" for k, v in filtered.items()
@@ -64,7 +62,7 @@ async def exchange_cookies_for_x_token(
     cookies = _extract_cookie_header(session)
 
     data = await http.post_json(
-        _TOKEN_URL,
+        PASSPORT_TOKEN_BY_SESSIONID_URL,
         data={
             "client_id": PASSPORT_CLIENT_ID,
             "client_secret": PASSPORT_CLIENT_SECRET,
@@ -78,7 +76,7 @@ async def exchange_cookies_for_x_token(
     if "access_token" not in data:
         raise InvalidCredentialsError(
             "failed to exchange session for x_token",
-            endpoint=_TOKEN_URL,
+            endpoint=PASSPORT_TOKEN_BY_SESSIONID_URL,
         )
     _log.info("Session cookies exchanged for x_token")
     return SecretStr(str(data["access_token"]))
