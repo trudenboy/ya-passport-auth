@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-04-11
+
+### Fixed
+
+- `PassportSessionRefresher` now uses `retpath=https://www.yandex.ru` instead
+  of `https://passport.yandex.ru`, so the redirect chain sets session cookies
+  on the broad `.yandex.ru` domain. Previously Quasar IoT
+  (`iot.quasar.yandex.ru`) returned 401 because cookies were scoped to
+  `passport.yandex.ru` only.
+- Added `www.yandex.ru` to `DEFAULT_ALLOWED_HOSTS`.
+
 ## [1.2.0] - 2026-04-11
 
 ### Added
