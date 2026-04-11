@@ -80,6 +80,7 @@ async def exchange_cookies_for_x_token(
             "failed to exchange session for x_token",
             endpoint=_TOKEN_URL,
         )
+    _log.info("Session cookies exchanged for x_token")
     return SecretStr(str(data["access_token"]))
 
 
@@ -103,4 +104,5 @@ async def exchange_x_token_for_music_token(
             "failed to obtain music token from x_token",
             endpoint=MUSIC_TOKEN_URL,
         )
+    _log.info("x_token exchanged for music_token")
     return SecretStr(str(data["access_token"]))

@@ -51,6 +51,8 @@ class CookieLoginFlow:
                 endpoint=_TOKEN_URL,
             )
 
+        sanitized = cookies.strip().replace("\r", "").replace("\n", "")
+
         data = await self._http.post_json(
             _TOKEN_URL,
             data={
@@ -59,7 +61,7 @@ class CookieLoginFlow:
             },
             headers={
                 "Ya-Client-Host": "passport.yandex.ru",
-                "Ya-Client-Cookie": cookies.strip(),
+                "Ya-Client-Cookie": sanitized,
             },
         )
 

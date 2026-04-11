@@ -92,3 +92,21 @@ class TestCookieLogin:
             sent_headers = calls[0].kwargs["headers"]
             assert sent_headers["Ya-Client-Host"] == "passport.yandex.ru"
             assert sent_headers["Ya-Client-Cookie"] == cookies
+
+    async def test_login_crlf_stripped(self, flow: CookieLoginFlow) -> None:
+        """CR/LF in raw cookie string must be stripped to prevent header injection."""
+        malicious = "Session_id=abc\r\nX-Injected: evil"
+        with aioresponses() as m:
+            m.post(
+                _TOKEN_URL,
+                status=200,
+                payload={"access_token": _TEST_X_TOKEN},
+                headers=_JSON_CT,
+            )
+            await flow.login(malicious)
+
+            calls = m.requests[("POST", URL(_TOKEN_URL))]
+            sent_cookie = calls[0].kwargs["headers"]["Ya-Client-Cookie"]
+            assert "\r" not in sent_cookie
+            assert "\n" not in sent_cookie
+            assert sent_cookie == "Session_id=abcX-Injected: evil"
