@@ -290,3 +290,124 @@ class TestPost:
                 headers=_JSON_HEADERS,
             )
             await client.post_json("https://evil.example.com/x", data={})
+
+
+class TestFollowRedirects:
+    """Tests for ``get_text_follow_redirects`` — redirect chain with host validation."""
+
+    async def test_no_redirect(self, client: SafeHttpClient) -> None:
+        """200 on first request returns the body directly."""
+        with aioresponses() as m:
+            m.get(_OK_URL, status=200, body="<html>ok</html>", headers=_HTML_HEADERS)
+            result = await client.get_text_follow_redirects(_OK_URL)
+        assert "ok" in result
+
+    async def test_single_redirect_allowed_host(self, client: SafeHttpClient) -> None:
+        target = "https://yandex.ru/landing"
+        with aioresponses() as m:
+            m.get(_OK_URL, status=302, headers={"Location": target})
+            m.get(target, status=200, body="<html>landed</html>", headers=_HTML_HEADERS)
+            result = await client.get_text_follow_redirects(_OK_URL)
+        assert "landed" in result
+
+    async def test_multi_hop_redirect(self, client: SafeHttpClient) -> None:
+        hop1 = "https://yandex.ru/hop1"
+        hop2 = "https://passport.yandex.ru/hop2"
+        with aioresponses() as m:
+            m.get(_OK_URL, status=302, headers={"Location": hop1})
+            m.get(hop1, status=302, headers={"Location": hop2})
+            m.get(hop2, status=200, body="<html>final</html>", headers=_HTML_HEADERS)
+            result = await client.get_text_follow_redirects(_OK_URL)
+        assert "final" in result
+
+    async def test_redirect_to_disallowed_host_raises(self, client: SafeHttpClient) -> None:
+        with aioresponses() as m:
+            m.get(
+                _OK_URL,
+                status=302,
+                headers={"Location": "https://evil.example.com/steal"},
+            )
+            with pytest.raises(UnexpectedHostError):
+                await client.get_text_follow_redirects(_OK_URL)
+
+    async def test_too_many_redirects_raises(self, client: SafeHttpClient) -> None:
+        """Redirect loop is capped."""
+        with aioresponses() as m:
+            for _ in range(4):
+                m.get(_OK_URL, status=302, headers={"Location": _OK_URL})
+            with pytest.raises(NetworkError, match="too many redirects"):
+                await client.get_text_follow_redirects(_OK_URL, max_redirects=3)
+
+    async def test_redirect_without_location_raises(self, client: SafeHttpClient) -> None:
+        with aioresponses() as m:
+            m.get(_OK_URL, status=302, headers={})
+            with pytest.raises(NetworkError, match="without Location"):
+                await client.get_text_follow_redirects(_OK_URL)
+
+    async def test_429_on_redirect_hop_raises(self, client: SafeHttpClient) -> None:
+        hop = "https://yandex.ru/limited"
+        with aioresponses() as m:
+            m.get(_OK_URL, status=302, headers={"Location": hop})
+            m.get(hop, status=429)
+            with pytest.raises(RateLimitedError):
+                await client.get_text_follow_redirects(_OK_URL)
+
+    async def test_relative_redirect_resolved(self, client: SafeHttpClient) -> None:
+        with aioresponses() as m:
+            m.get(_OK_URL, status=302, headers={"Location": "/other"})
+            m.get(
+                "https://passport.yandex.ru/other",
+                status=200,
+                body="<html>relative</html>",
+                headers=_HTML_HEADERS,
+            )
+            result = await client.get_text_follow_redirects(_OK_URL)
+        assert "relative" in result
+
+    async def test_custom_headers_dropped_after_first_hop(
+        self,
+        session: aiohttp.ClientSession,
+        config: ClientConfig,
+        limiter: AsyncMinDelayLimiter,
+    ) -> None:
+        """Custom headers are only sent on the initial request, not on
+        redirect hops (prevents leaking auth tokens to redirect targets)."""
+        hop = "https://yandex.ru/redirected"
+        client = SafeHttpClient(session=session, config=config, limiter=limiter)
+
+        captured_headers: list[dict[str, str]] = []
+        original_request = session.request
+
+        async def spy_request(
+            method: str,
+            url: object,
+            *args: object,
+            headers: dict[str, str] | None = None,
+            **kwargs: object,
+        ) -> aiohttp.ClientResponse:
+            captured_headers.append(dict(headers) if headers else {})
+            return await original_request(
+                method,
+                url,
+                *args,
+                headers=headers,
+                **kwargs,  # type: ignore[arg-type]
+            )
+
+        with aioresponses() as m:
+            m.get(_OK_URL, status=302, headers={"Location": hop})
+            m.get(hop, status=200, body="<html>ok</html>", headers=_HTML_HEADERS)
+            session.request = spy_request  # type: ignore[assignment]
+            try:
+                await client.get_text_follow_redirects(
+                    _OK_URL, headers={"track_id": "secret-track"}
+                )
+            finally:
+                session.request = original_request  # type: ignore[method-assign]
+
+        assert captured_headers[0].get("track_id") == "secret-track"
+        assert "track_id" not in captured_headers[1]
+
+    async def test_disallowed_initial_host_raises(self, client: SafeHttpClient) -> None:
+        with pytest.raises(UnexpectedHostError):
+            await client.get_text_follow_redirects("https://evil.example.com/x")

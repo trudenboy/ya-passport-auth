@@ -60,6 +60,32 @@ class TestRefreshCookies:
             )
             m.get(
                 _SESSION_URL,
+                status=302,
+                headers={**_HTML_CT, "Location": "https://passport.yandex.ru/profile"},
+            )
+            m.get(
+                "https://passport.yandex.ru/profile",
+                status=200,
+                body="<html>ok</html>",
+                headers=_HTML_CT,
+            )
+            await refresher.refresh(SecretStr(_TEST_X_TOKEN))
+
+    async def test_success_no_redirect(self, refresher: PassportSessionRefresher) -> None:
+        """Session endpoint may respond with 200 directly."""
+        with aioresponses() as m:
+            m.post(
+                _AUTH_URL,
+                status=200,
+                payload={
+                    "status": "ok",
+                    "passport_host": "https://passport.yandex.ru",
+                    "track_id": "test-track-id",
+                },
+                headers=_JSON_CT,
+            )
+            m.get(
+                _SESSION_URL,
                 status=200,
                 body="<html>ok</html>",
                 headers=_HTML_CT,
