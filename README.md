@@ -9,15 +9,18 @@
 
 ## Features
 
-- **Full token-derivation graph** — QR login, x_token exchange, music_token
-  refresh, Passport cookie refresh, Quasar CSRF, Glagol device token,
-  account info.
-- **Security-first** — `SecretStr` redacts tokens in repr/str/format/tracebacks,
-  blocks pickling, host allow-list, CSRF extraction, rate limiting,
-  response size caps, log redaction.
+- **Two login methods** — QR code scan and cookie-based login.
+- **Full token-derivation graph** — x\_token exchange, music\_token refresh,
+  Passport cookie refresh (redirect-following), Quasar CSRF, Glagol device
+  token, account info.
+- **Security-first** — `SecretStr` redacts tokens in repr/str/format/tracebacks
+  and blocks pickling; host allow-list with HTTPS-only enforcement; CSRF
+  extraction; per-request rate limiting; response size caps; log redaction via
+  `RedactingFilter`.
 - **Async-native** — built on `aiohttp` with `asyncio.Lock`-protected
   rate limiter and connection management.
 - **Strictly typed** — `mypy --strict` clean, PEP 561 `py.typed` marker.
+- **Well tested** — 221 tests, 97.8 % branch coverage.
 
 ## Installation
 
@@ -27,22 +30,47 @@ pip install ya-passport-auth
 
 ## Quick start
 
-```python
-from ya_passport_auth import PassportClient, SecretStr
+### QR login
 
-async def main():
+```python
+from ya_passport_auth import PassportClient
+
+async def qr_login():
     async with PassportClient.create() as client:
-        # QR login
         qr = await client.start_qr_login()
         print(f"Scan QR: {qr.qr_url}")
         creds = await client.poll_qr_until_confirmed(qr)
 
-        # Token refresh
-        new_music = await client.refresh_music_token(creds.x_token)
-
-        # Account info
         info = await client.fetch_account_info(creds.x_token)
         print(f"Logged in as {info.display_login} (uid={info.uid})")
+```
+
+### Cookie login
+
+```python
+from ya_passport_auth import PassportClient
+
+async def cookie_login():
+    cookies = "Session_id=...; sessionid2=..."  # from browser
+    async with PassportClient.create() as client:
+        creds = await client.login_cookies(cookies)
+        print(f"x_token acquired, music_token ready")
+```
+
+## Architecture
+
+```
+PassportClient  (public facade)
+├── SafeHttpClient  (host allow-list, HTTPS enforcement, size caps, rate limiting)
+│   └── AsyncMinDelayLimiter
+└── Flows
+    ├── QrLoginFlow        → CSRF scrape → session create → poll → x_token
+    ├── CookieLoginFlow    → raw cookies → x_token
+    ├── _token_exchange    → cookies→x_token, x_token→music_token  (shared)
+    ├── PassportSessionRefresher  → x_token → session cookies (follows redirects)
+    ├── AccountInfoFetcher → x_token → uid/login/avatar
+    ├── QuasarCsrfFetcher  → CSRF token for IoT API
+    └── GlagolDeviceTokenFetcher → music_token → Glagol device token
 ```
 
 ## API overview
@@ -54,8 +82,9 @@ async def main():
 | `start_qr_login()` | Begin QR login, returns `QrSession` |
 | `poll_qr_until_confirmed(qr)` | Poll until scanned, returns `Credentials` |
 | `complete_qr_login(qr)` | Exchange confirmed QR for tokens |
-| `refresh_music_token(x_token)` | x_token -> music_token |
-| `refresh_passport_cookies(x_token)` | Refresh session cookies |
+| `login_cookies(cookies)` | Exchange browser cookies for `Credentials` |
+| `refresh_music_token(x_token)` | x\_token → music\_token |
+| `refresh_passport_cookies(x_token)` | Refresh session cookies (follows redirect chain) |
 | `get_quasar_csrf_token()` | Quasar CSRF token |
 | `get_glagol_device_token(music_token, ...)` | Glagol device token |
 | `fetch_account_info(x_token)` | Account metadata |
@@ -65,6 +94,18 @@ async def main():
 
 Opaque wrapper — `repr()` and `str()` return `***`, pickling raises
 `TypeError`. Access plaintext only via `get_secret()`.
+
+### `Credentials`
+
+Frozen, slotted dataclass returned by `poll_qr_until_confirmed()` and
+`login_cookies()`:
+
+| Field | Type |
+|-------|------|
+| `x_token` | `SecretStr` |
+| `music_token` | `SecretStr` |
+| `uid` | `int \| None` |
+| `login` | `str \| None` |
 
 ### Exception hierarchy
 
@@ -80,6 +121,18 @@ YaPassportError
     └── QRTimeoutError
 ```
 
+## Security
+
+- **HTTPS-only** — `_check_host()` rejects any non-`https` URL, preventing
+  protocol-downgrade attacks via redirect `Location` headers.
+- **Host allow-list** — every request is validated against a frozen set of
+  allowed Yandex hosts. Redirect targets are checked at each hop.
+- **Token redaction** — `SecretStr` hides values in `repr`/`str`/`format`;
+  `RedactingFilter` scrubs OAuth headers and hex tokens from log output.
+- **No pickling** — `SecretStr` and `Credentials` block `pickle`/`copy`.
+- **Response size caps** — 1 MiB for JSON, 2 MiB for HTML.
+- See [SECURITY.md](SECURITY.md) for the full threat model (T1–T14).
+
 ## Security disclaimer
 
 This library interacts with Yandex Passport using **public mobile OAuth client
@@ -93,4 +146,4 @@ response shapes, and regex patterns may break without notice.
 
 ## License
 
-MIT. See `LICENSE` and `NOTICE` for third-party attribution.
+MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for third-party attribution.
