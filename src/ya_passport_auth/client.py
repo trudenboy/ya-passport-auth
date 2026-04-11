@@ -233,8 +233,9 @@ class PassportClient:
     async def _complete_auth(self) -> Credentials:
         """Exchange session cookies → x_token → music_token → Credentials.
 
-        Shared by QR and cookie flows. Expects session cookies to
-        already be present in the cookie jar.
+        Used when authentication has already established session cookies
+        in the client's cookie jar, such as the QR login flow. This does
+        not handle the raw-cookie login path used by ``login_cookies()``.
         """
         x_token = await exchange_cookies_for_x_token(self._http, self._session)
         music_token = await exchange_x_token_for_music_token(self._http, x_token)

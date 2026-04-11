@@ -1,7 +1,7 @@
 """Shared token-exchange helpers used by multiple auth flows.
 
 Extracts cookies → x_token and x_token → music_token logic so it can
-be reused by QR, password, and cookie-based login flows.
+be reused by QR and cookie-based login flows.
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ async def exchange_cookies_for_x_token(
     """Exchange session cookies for an ``x_token``.
 
     The cookies must already be present in the session's cookie jar
-    (placed there by a successful QR confirmation, password login, etc.).
+    (placed there by a successful QR confirmation or session refresh).
     """
     cookies = _extract_cookie_header(session)
 

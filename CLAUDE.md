@@ -60,8 +60,10 @@ PassportClient.poll_qr_until_confirmed
 Flow call graph for cookie login:
 ```
 PassportClient.login_cookies
-  → CookieLoginFlow.login        (raw cookies → x_token)
-  → exchange_x_token_for_music_token → Credentials
+  → CookieLoginFlow.login          (raw cookies → x_token)
+  → exchange_x_token_for_music_token (x_token → music_token)
+  → AccountInfoFetcher.fetch       (x_token → uid/login, graceful failure)
+  → returns Credentials
 ```
 
 **Security invariants** (see SECURITY.md for full threat model T1-T14):
