@@ -169,7 +169,6 @@ class SafeHttpClient:
         on broader domains (e.g. ``.yandex.ru``).
         """
         self._check_host(url)
-        await self._limiter.acquire()
 
         current_url = url
         merged: dict[str, str] = {
@@ -182,6 +181,7 @@ class SafeHttpClient:
         )
 
         for _ in range(max_redirects + 1):
+            await self._limiter.acquire()
             try:
                 response = await self._session.request(
                     "GET",
