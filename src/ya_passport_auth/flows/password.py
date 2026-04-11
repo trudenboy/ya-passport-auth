@@ -98,7 +98,7 @@ class PasswordLoginFlow:
             data={"csrf_token": csrf_token, "login": username},
         )
         status = data.get("status")
-        if isinstance(status, str) and status != "ok":
+        if status != "ok":
             raise AuthFailedError(
                 f"multi_step/start failed (status={status!r})",
                 endpoint=_START_URL,
@@ -191,7 +191,7 @@ class PasswordLoginFlow:
             },
         )
         status = data.get("status")
-        if isinstance(status, str) and status != "ok":
+        if status != "ok":
             raise AuthFailedError(
                 f"SMS request failed (status={status!r})",
                 endpoint=_SMS_REQUEST_URL,
@@ -214,7 +214,7 @@ class PasswordLoginFlow:
             },
         )
         verify_status = verify_data.get("status")
-        if isinstance(verify_status, str) and verify_status != "ok":
+        if verify_status != "ok":
             raise AuthFailedError(
                 f"SMS code verification failed (status={verify_status!r})",
                 endpoint=_SMS_VERIFY_URL,
@@ -229,7 +229,7 @@ class PasswordLoginFlow:
             },
         )
         commit_status = commit_data.get("status")
-        if isinstance(commit_status, str) and commit_status != "ok":
+        if commit_status != "ok":
             raise AuthFailedError(
                 f"SMS commit failed (status={commit_status!r})",
                 endpoint=_SMS_COMMIT_URL,
@@ -246,7 +246,7 @@ class PasswordLoginFlow:
             },
         )
         status = data.get("status")
-        if isinstance(status, str) and status != "ok":
+        if status != "ok":
             raise AuthFailedError(
                 f"magic link request failed (status={status!r})",
                 endpoint=_MAGIC_SEND_URL,
@@ -258,6 +258,8 @@ class PasswordLoginFlow:
 
         Returns ``True`` if confirmed (cookies now in jar),
         ``False`` if still pending.
+
+        Raises :class:`AuthFailedError` on server error responses.
         """
         data = await self._http.post_json(
             _MAGIC_STATUS_URL,
@@ -270,6 +272,11 @@ class PasswordLoginFlow:
         if status == "magic_link_confirmed":
             _log.info("magic link confirmed for track_id=%s", auth.track_id)
             return True
+        if isinstance(status, str) and status not in ("PENDING", "pending"):
+            raise AuthFailedError(
+                f"magic link check failed (status={status!r})",
+                endpoint=_MAGIC_STATUS_URL,
+            )
         return False
 
     async def get_captcha(self, auth: AuthSession) -> CaptchaChallenge:
