@@ -4,8 +4,9 @@
 that enforces the library's network invariants on every request:
 
 * Host allow-list — the response URL's host must be in
-  :attr:`ClientConfig.allowed_hosts` (T4). Redirects are disabled so
-  a compromised endpoint cannot bounce the request to a foreign host.
+  :attr:`ClientConfig.allowed_hosts` (T4). Redirects are disabled by
+  default; :meth:`get_text_follow_redirects` follows them while
+  validating each hop's host against the allow-list.
 * Response size caps — JSON bodies are capped at 1 MiB and HTML
   bodies at 2 MiB (T5).
 * Rate limiting — every request goes through an injected
@@ -150,6 +151,108 @@ class SafeHttpClient:
                 endpoint=url,
             ) from exc
 
+    async def get_text_follow_redirects(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str] | None = None,
+        max_redirects: int = 10,
+    ) -> str:
+        """GET *url* following redirects with host validation on each hop.
+
+        Custom *headers* are sent only on the first request; redirect hops
+        carry only the default ``User-Agent`` (plus cookies from the jar).
+
+        Each hop's ``Location`` target is validated against
+        :attr:`ClientConfig.allowed_hosts` before following. This is used
+        by the session refresh flow where the redirect chain sets cookies
+        on broader domains (e.g. ``.yandex.ru``).
+        """
+        self._check_host(url)
+
+        current_url = url
+        merged: dict[str, str] = {
+            "User-Agent": self._config.user_agent,
+            **(headers or {}),
+        }
+        timeout = aiohttp.ClientTimeout(
+            total=self._config.total_timeout_seconds,
+            connect=self._config.connect_timeout_seconds,
+        )
+
+        for _ in range(max_redirects + 1):
+            await self._limiter.acquire()
+            try:
+                response = await self._session.request(
+                    "GET",
+                    current_url,
+                    headers=merged,
+                    timeout=timeout,
+                    allow_redirects=False,
+                )
+            except aiohttp.ClientError as exc:
+                raise NetworkError(
+                    f"GET request failed: {exc}",
+                    endpoint=current_url,
+                ) from exc
+
+            if 300 <= response.status < 400:
+                location = response.headers.get("Location")
+                response.release()
+                if not location:
+                    raise NetworkError(
+                        f"redirect ({response.status}) without Location header",
+                        status_code=response.status,
+                        endpoint=current_url,
+                    )
+                resolved = str(URL(current_url).join(URL(location)))
+                self._check_host(resolved)
+                current_url = resolved
+                # Drop custom headers after first hop — only User-Agent persists.
+                merged = {"User-Agent": self._config.user_agent}
+                continue
+
+            try:
+                self._check_host(str(response.url))
+            except UnexpectedHostError:
+                response.release()
+                raise
+
+            if response.status == 429:
+                response.release()
+                raise RateLimitedError(
+                    "rate limited by upstream",
+                    status_code=429,
+                    endpoint=current_url,
+                )
+
+            if response.status >= 400:
+                response.release()
+                raise NetworkError(
+                    f"HTTP {response.status} from redirect chain",
+                    status_code=response.status,
+                    endpoint=current_url,
+                )
+
+            status = response.status
+            try:
+                body = await self._read_capped(response, HTML_MAX_BYTES, current_url)
+            finally:
+                response.release()
+            try:
+                return body.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise NetworkError(
+                    f"response is not valid UTF-8: {exc}",
+                    status_code=status,
+                    endpoint=current_url,
+                ) from exc
+
+        raise NetworkError(
+            f"too many redirects (>{max_redirects})",
+            endpoint=url,
+        )
+
     # ------------------------------------------------------------------ #
     # Internals
     # ------------------------------------------------------------------ #
@@ -254,7 +357,13 @@ class SafeHttpClient:
         return response
 
     def _check_host(self, url: str) -> None:
-        host = URL(url).host
+        parsed = URL(url)
+        if parsed.scheme != "https":
+            raise UnexpectedHostError(
+                f"non-HTTPS scheme {parsed.scheme!r} is not allowed",
+                endpoint=url,
+            )
+        host = parsed.host
         if host is None or host not in self._config.allowed_hosts:
             raise UnexpectedHostError(
                 f"host {host!r} is not in the allow-list",

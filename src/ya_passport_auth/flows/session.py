@@ -64,8 +64,10 @@ class PassportSessionRefresher:
         # Always use the well-known session URL. The ``passport_host``
         # field in the response body is attacker-controllable and could
         # be used as an SSRF vector (T4) — ignore it entirely.
+        # Follow the redirect chain so cookies are set on broader domains
+        # (e.g. .yandex.ru) — required for Quasar IoT endpoints.
         _log.info("refreshing session cookies via track_id")
-        await self._http.get_text(
+        await self._http.get_text_follow_redirects(
             _SESSION_URL,
             headers={"track_id": track_id},
         )

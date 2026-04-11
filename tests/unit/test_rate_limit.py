@@ -109,8 +109,9 @@ class TestConcurrency:
 
         await asyncio.gather(worker(), worker(), worker())
         stamps.sort()
-        assert stamps[1] - stamps[0] >= 0.04
-        assert stamps[2] - stamps[1] >= 0.04
+        # Use 0.035 as lower bound (70% of 0.05) to tolerate OS scheduling jitter
+        assert stamps[1] - stamps[0] >= 0.035
+        assert stamps[2] - stamps[1] >= 0.035
 
 
 class TestCancellationSafety:

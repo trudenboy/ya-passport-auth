@@ -18,7 +18,12 @@ import aiohttp
 from ya_passport_auth.config import ClientConfig
 from ya_passport_auth.credentials import Credentials, SecretStr
 from ya_passport_auth.exceptions import QRTimeoutError, YaPassportError
+from ya_passport_auth.flows._token_exchange import (
+    exchange_cookies_for_x_token,
+    exchange_x_token_for_music_token,
+)
 from ya_passport_auth.flows.account import AccountInfoFetcher
+from ya_passport_auth.flows.cookie_login import CookieLoginFlow
 from ya_passport_auth.flows.glagol import GlagolDeviceTokenFetcher
 from ya_passport_auth.flows.qr import QrLoginFlow, QrSession
 from ya_passport_auth.flows.quasar import QuasarCsrfFetcher
@@ -150,31 +155,27 @@ class PassportClient:
         ``poll_qr_until_confirmed`` call it automatically.
         """
         del qr  # cookies are in the session jar
-        x_token = await self._qr.get_x_token()
-        music_token = await self._qr.get_music_token(x_token)
+        return await self._complete_auth()
 
-        try:
-            info = await self.fetch_account_info(x_token)
-            uid = info.uid
-            login = info.display_login
-        except (YaPassportError, aiohttp.ClientError, TimeoutError):
-            _log.debug("account info fetch failed; continuing without metadata")
-            uid = None
-            login = None
+    # ------------------------------------------------------------------ #
+    # Cookie login
+    # ------------------------------------------------------------------ #
+    async def login_cookies(self, cookies: str) -> Credentials:
+        """Exchange raw browser cookies for :class:`Credentials`.
 
-        return Credentials(
-            x_token=x_token,
-            music_token=music_token,
-            uid=uid,
-            display_login=login,
-        )
+        *cookies* should be a semicolon-separated ``key=value`` string.
+        """
+        flow = CookieLoginFlow(http=self._http)
+        x_token = await flow.login(cookies)
+        music_token = await exchange_x_token_for_music_token(self._http, x_token)
+        return await self._build_credentials(x_token, music_token)
 
     # ------------------------------------------------------------------ #
     # Token ops
     # ------------------------------------------------------------------ #
     async def refresh_music_token(self, x_token: SecretStr) -> SecretStr:
         """Exchange an ``x_token`` for a fresh music-scoped OAuth token."""
-        return await self._qr.get_music_token(x_token)
+        return await exchange_x_token_for_music_token(self._http, x_token)
 
     async def refresh_passport_cookies(self, x_token: SecretStr) -> None:
         """Refresh Passport session cookies from an ``x_token``."""
@@ -210,6 +211,42 @@ class PassportClient:
         """Return ``True`` if the ``x_token`` is accepted by ``short_info``."""
         fetcher = AccountInfoFetcher(http=self._http)
         return await fetcher.validate(x_token)
+
+    # ------------------------------------------------------------------ #
+    # Shared auth completion
+    # ------------------------------------------------------------------ #
+    async def _complete_auth(self) -> Credentials:
+        """Exchange session cookies → x_token → music_token → Credentials.
+
+        Used when authentication has already established session cookies
+        in the client's cookie jar, such as the QR login flow. This does
+        not handle the raw-cookie login path used by ``login_cookies()``.
+        """
+        x_token = await exchange_cookies_for_x_token(self._http, self._session)
+        music_token = await exchange_x_token_for_music_token(self._http, x_token)
+        return await self._build_credentials(x_token, music_token)
+
+    async def _build_credentials(
+        self,
+        x_token: SecretStr,
+        music_token: SecretStr,
+    ) -> Credentials:
+        """Fetch optional account info and assemble :class:`Credentials`."""
+        try:
+            info = await self.fetch_account_info(x_token)
+            uid = info.uid
+            login = info.display_login
+        except (YaPassportError, aiohttp.ClientError, TimeoutError):
+            _log.debug("account info fetch failed; continuing without metadata")
+            uid = None
+            login = None
+
+        return Credentials(
+            x_token=x_token,
+            music_token=music_token,
+            uid=uid,
+            display_login=login,
+        )
 
     # ------------------------------------------------------------------ #
     # Lifecycle
