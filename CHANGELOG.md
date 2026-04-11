@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-04-11
+
+### Added
+
+- **Cookie login flow** (`CookieLoginFlow`, `PassportClient.login_cookies()`) —
+  authenticate with existing Yandex session cookies → x\_token → music\_token.
+  Uses `Ya-Client-Cookie` header via `mobileproxy.passport.yandex.net`.
+- `SafeHttpClient.get_text_follow_redirects()` — follows 3xx redirect chains
+  with per-hop host validation, rate limiting, custom-header stripping, and
+  max-redirect cap. Used by `PassportSessionRefresher` so session cookies land
+  on the broad `.yandex.ru` domain (fixes Quasar IoT 401s).
+- `PassportClient.refresh_music_token()` — standalone music token refresh from
+  an existing x\_token.
+- HTTPS scheme enforcement in `_check_host()` — rejects any non-`https` URL,
+  preventing protocol-downgrade attacks via redirect `Location` headers.
+- 221 tests, 97.8 % branch coverage.
+
+### Changed
+
+- **Shared token exchange** (`_token_exchange.py`) — extracted
+  `exchange_cookies_for_x_token()` and `exchange_x_token_for_music_token()`
+  from the QR flow. Both QR and Cookie flows now share the same code path.
+- `_build_credentials()` helper in `PassportClient` eliminates duplicated
+  credential-assembly logic between QR and Cookie flows.
+- `PASSPORT_TOKEN_BY_SESSIONID_URL` centralised in `constants.py`.
+
+### Removed
+
+- **Password login flow** — all `/registration-validations/` endpoints now
+  return HTTP 403; removed `PasswordLoginFlow` and related models
+  (`AuthSession`, `CaptchaChallenge`) and exceptions (`AccountNotFoundError`,
+  `PasswordError`, `CaptchaRequiredError`).
+- SMS auth, magic link, and captcha flows (no BFF alternatives exist).
+- Stale E2E debug/test scripts (`e2e_debug.py`, `e2e_test.py`).
+
+### Fixed
+
+- `get_text_follow_redirects()` now validates 4xx/5xx status codes at each hop.
+- Rate limiter is acquired per redirect hop (not only before the first request).
+
 ## [1.0.0] - 2026-04-10
 
 ### Changed
