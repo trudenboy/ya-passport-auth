@@ -60,12 +60,13 @@ def _info(msg: str) -> None:
 def _print_creds(creds: Credentials) -> None:
     _info(f"uid           : {creds.uid}")
     _info(f"display_login : {creds.display_login}")
-    _info(f"x_token       : {creds.x_token}")
-    _info(f"music_token   : {creds.music_token}")
     assert isinstance(creds.x_token, SecretStr)
-    assert len(creds.x_token.get_secret()) > 10
+    _info("x_token       : [SecretStr present]")
     if creds.music_token is not None:
-        assert len(creds.music_token.get_secret()) > 10
+        assert isinstance(creds.music_token, SecretStr)
+        _info("music_token   : [SecretStr present]")
+    else:
+        _info("music_token   : None")
 
 
 def _menu(prompt: str, choices: list[str]) -> int:
@@ -147,8 +148,7 @@ async def validate_tokens(client: PassportClient, creds: Credentials) -> None:
     _banner("VALIDATION: Music Token Refresh")
     new_music = await client.refresh_music_token(x_token)
     assert isinstance(new_music, SecretStr)
-    assert len(new_music.get_secret()) > 10
-    _info(f"new music_token: {new_music}")
+    _info("new music_token: [SecretStr present]")
     _ok("Music token refreshed")
 
     # Refresh passport cookies
@@ -161,7 +161,7 @@ async def validate_tokens(client: PassportClient, creds: Credentials) -> None:
     try:
         quasar_csrf = await client.get_quasar_csrf_token()
         assert isinstance(quasar_csrf, SecretStr)
-        _info(f"quasar csrf: {quasar_csrf}")
+        _info("quasar csrf: [SecretStr present]")
         _ok("Quasar CSRF token fetched")
     except Exception as exc:
         _skip(f"Quasar CSRF failed (may need smart home setup): {exc}")
@@ -180,18 +180,17 @@ async def validate_tokens(client: PassportClient, creds: Credentials) -> None:
                 platform=platform or "yandexstation",
             )
             assert isinstance(glagol, SecretStr)
-            _info(f"glagol token: {glagol}")
+            _info("glagol token: [SecretStr present]")
             _ok("Glagol device token fetched")
     except Exception as exc:
         _skip(f"Glagol token failed: {exc}")
 
-    # SecretStr repr safety
+    # SecretStr repr safety — verify redaction without extracting secrets
     _banner("VALIDATION: SecretStr Safety")
-    raw_x = x_token.get_secret()
-    assert raw_x not in repr(creds)
-    assert raw_x not in str(x_token)
-    assert raw_x not in f"{x_token}"
-    assert raw_x not in f"{x_token!r}"
+    assert "***" in repr(creds)
+    assert str(x_token) == "***"
+    assert f"{x_token}" == "***"
+    assert f"{x_token!r}" == "SecretStr('***')"
     _ok("SecretStr never leaks tokens")
 
     # Credentials frozen
