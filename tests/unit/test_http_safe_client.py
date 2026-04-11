@@ -380,7 +380,7 @@ class TestFollowRedirects:
 
         async def spy_request(
             method: str,
-            url: object,
+            url: str | URL,
             *args: object,
             headers: dict[str, str] | None = None,
             **kwargs: object,
