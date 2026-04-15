@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Async Yandex Passport (mobile) auth library for Music Assistant providers"
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 authors = [{ name = "Mikhail Nevskiy" }]
 keywords = [
     "yandex",
@@ -25,6 +25,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: Internet :: WWW/HTTP",
