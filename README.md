@@ -133,6 +133,12 @@ YaPassportError
 - **Response size caps** — 1 MiB for JSON, 2 MiB for HTML.
 - See [SECURITY.md](SECURITY.md) for the full threat model (T1–T14).
 
+## Used by
+
+- [ma-provider-yandex-music](https://github.com/trudenboy/ma-provider-yandex-music) — Music Assistant provider for Yandex Music
+- [ma-provider-yandex-ynison](https://github.com/trudenboy/ma-provider-yandex-ynison) — Music Assistant provider for Yandex Ynison (Spotify Connect analog)
+- [ma-provider-yandex-station](https://github.com/trudenboy/ma-provider-yandex-station) — Music Assistant provider for Yandex Station
+
 ## Security disclaimer
 
 This library interacts with Yandex Passport using **public mobile OAuth client
