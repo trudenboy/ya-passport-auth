@@ -125,6 +125,7 @@ class Credentials:
     music_token: SecretStr | None = None
     uid: int | None = None
     display_login: str | None = None
+    refresh_token: SecretStr | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.x_token, SecretStr):
@@ -135,6 +136,11 @@ class Credentials:
             raise TypeError(
                 f"Credentials.music_token must be a SecretStr or None, "
                 f"got {type(self.music_token).__name__}",
+            )
+        if self.refresh_token is not None and not isinstance(self.refresh_token, SecretStr):
+            raise TypeError(
+                f"Credentials.refresh_token must be a SecretStr or None, "
+                f"got {type(self.refresh_token).__name__}",
             )
 
 

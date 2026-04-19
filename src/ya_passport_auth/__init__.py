@@ -14,6 +14,7 @@ from ya_passport_auth.credentials import (
 from ya_passport_auth.exceptions import (
     AuthFailedError,
     CsrfExtractionError,
+    DeviceCodeTimeoutError,
     InvalidCredentialsError,
     NetworkError,
     QRPendingError,
@@ -23,7 +24,7 @@ from ya_passport_auth.exceptions import (
     YaPassportError,
 )
 from ya_passport_auth.flows.qr import QrSession
-from ya_passport_auth.models import AccountInfo
+from ya_passport_auth.models import AccountInfo, DeviceCodeSession, OAuthTokens
 
 __all__ = [
     "AccountInfo",
@@ -31,9 +32,12 @@ __all__ = [
     "ClientConfig",
     "Credentials",
     "CsrfExtractionError",
+    "DeviceCodeSession",
+    "DeviceCodeTimeoutError",
     "InvalidCredentialsError",
     "MemoryCredentialStore",
     "NetworkError",
+    "OAuthTokens",
     "PassportClient",
     "QRPendingError",
     "QRTimeoutError",

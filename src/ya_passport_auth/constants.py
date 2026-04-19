@@ -13,9 +13,11 @@ from typing import Final
 
 __all__ = [
     "CSRF_PATTERNS",
+    "DEVICE_CODE_URL",
     "MUSIC_CLIENT_ID",
     "MUSIC_CLIENT_SECRET",
     "MUSIC_TOKEN_URL",
+    "OAUTH_TOKEN_URL",
     "PASSPORT_API_URL",
     "PASSPORT_BFF_URL",
     "PASSPORT_CLIENT_ID",
@@ -42,6 +44,12 @@ YANDEX_WWW_URL: Final = "https://www.yandex.ru"
 PASSPORT_API_URL: Final = "https://mobileproxy.passport.yandex.net"
 PASSPORT_TOKEN_BY_SESSIONID_URL: Final = f"{PASSPORT_API_URL}/1/bundle/oauth/token_by_sessionid"
 MUSIC_TOKEN_URL: Final = "https://oauth.mobile.yandex.net/1/token"
+
+# OAuth Device Flow endpoints on oauth.yandex.ru — used by the
+# Passport-scoped device code flow that yields an x_token equivalent
+# to the one produced by QR/cookie logins.
+DEVICE_CODE_URL: Final = "https://oauth.yandex.ru/device/code"
+OAUTH_TOKEN_URL: Final = "https://oauth.yandex.ru/token"
 
 # Passport web BFF — new frontend endpoints replacing the legacy
 # ``/registration-validations/`` API. Require ``X-CSRF-Token`` header

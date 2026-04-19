@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-04-19
+
+### Added
+
+- **OAuth Device Flow** (RFC 8628) as a third login method alongside QR and
+  cookie login. `PassportClient.login_device_code(on_code=...)` runs the full
+  flow; `start_device_login()` + `poll_device_until_confirmed()` expose the
+  two phases separately for UI-driven integrations. Device Flow uses
+  `PASSPORT_CLIENT_ID` against `oauth.yandex.ru`, yielding a full x\_token
+  equivalent to QR/cookie login.
+- **Silent re-auth** via `PassportClient.refresh_credentials(creds)` — device
+  flow returns a long-lived `refresh_token` that mints a fresh x\_token
+  without user interaction. Only device-flow credentials carry a
+  `refresh_token`; QR/cookie credentials leave it `None`.
+- `DeviceCodeSession`, `OAuthTokens` models (frozen+slotted, token-redacted
+  `__repr__`).
+- `Credentials.refresh_token: SecretStr | None` — trailing, defaults to
+  `None` (backwards compatible for QR/cookie callers).
+- `DeviceCodeTimeoutError` exception (subclass of `AuthFailedError`).
+- `DEVICE_CODE_URL`, `OAUTH_TOKEN_URL` constants.
+- RFC 8628 §3.5 `slow_down` handling — `poll_device_until_confirmed()`
+  increases the poll interval by 5 s when the server asks the client to
+  back off, instead of aborting with `AuthFailedError`.
+- 42 new tests (24 unit + 14 integration + 4 log-leak/repr additions).
+
+### Verified
+
+- End-to-end against a real Yandex account: device-code exchange,
+  x\_token → music\_token, `short_info`, and `refresh_token` re-issue all
+  work as documented.
+
 ## [1.2.3] - 2026-04-12
 
 ### Fixed
