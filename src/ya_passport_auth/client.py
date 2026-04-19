@@ -230,6 +230,12 @@ class PassportClient:
             if result is PollOutcome.SLOW_DOWN:
                 interval += _SLOW_DOWN_INCREMENT_S
                 _log.warning("slow_down received; increasing poll interval to %.1fs", interval)
+                remaining = deadline - time.monotonic()
+                if interval > remaining:
+                    # RFC 8628 §3.5 forbids polling faster than the bumped
+                    # interval; if the deadline is too close to honor it,
+                    # stop rather than send one final too-fast request.
+                    raise DeviceCodeTimeoutError("device polling timed out after slow_down")
 
             remaining = deadline - time.monotonic()
             if remaining <= 0:

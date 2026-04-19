@@ -182,7 +182,12 @@ class TestPollDeviceUntilConfirmed:
 
         assert creds.x_token.get_secret() == _TEST_ACCESS_TOKEN
 
-    async def test_slow_down_does_not_abort(self, caplog: pytest.LogCaptureFixture) -> None:
+    async def test_slow_down_does_not_abort(
+        self, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The real RFC 8628 increment is 5 s; shrink it so the test doesn't
+        # incur real wall-clock waits via asyncio.sleep.
+        monkeypatch.setattr("ya_passport_auth.client._SLOW_DOWN_INCREMENT_S", 0.001)
         caplog.set_level(logging.WARNING, logger="ya_passport_auth")
 
         async with PassportClient.create(config=_fast_config()) as client:
@@ -200,6 +205,22 @@ class TestPollDeviceUntilConfirmed:
         assert any("slow_down" in r.getMessage() for r in caplog.records), (
             "slow_down should be logged at WARNING level"
         )
+
+    async def test_slow_down_near_deadline_raises_timeout(self) -> None:
+        """RFC 8628 §3.5 forbids polling faster than the bumped interval; if
+        the deadline is closer than the new interval, abort instead of
+        sending one final too-fast request."""
+        async with PassportClient.create(config=_fast_config()) as client:
+            with aioresponses() as m:
+                _mock_device_code_success(m)
+                session = await client.start_device_login()
+                _mock_token_slow_down(m)
+                with pytest.raises(DeviceCodeTimeoutError, match="slow_down"):
+                    await client.poll_device_until_confirmed(
+                        session,
+                        poll_interval=0.001,
+                        total_timeout=0.05,
+                    )
 
     async def test_timeout(self) -> None:
         async with PassportClient.create(config=_fast_config()) as client:
