@@ -157,6 +157,7 @@ class TestNoTokenLeakInLogs:
         assert _SECRET_ACCESS not in all_log_text
         assert _SECRET_REFRESH not in all_log_text
         assert _SECRET_MUSIC not in all_log_text
+        assert "leakcode" not in all_log_text, "user_code leaked into logs"
 
 
 class TestNoTokenLeakInRepr:

@@ -120,7 +120,11 @@ class DeviceCodeFlow:
         expires_in = _require_int(data, "expires_in", DEVICE_CODE_URL)
         interval = _require_int(data, "interval", DEVICE_CODE_URL)
 
-        _log.info("Device code issued, user_code=%s", user_code)
+        _log.info(
+            "Device code issued, expires_in=%s interval=%s",
+            expires_in,
+            interval,
+        )
         return DeviceCodeSession(
             device_code=SecretStr(device_code),
             user_code=user_code,
