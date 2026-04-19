@@ -9,7 +9,9 @@
 
 ## Features
 
-- **Two login methods** — QR code scan and cookie-based login.
+- **Three login methods** — QR code scan, OAuth Device Flow (short
+  code on `ya.ru/device`, plus a `refresh_token` for silent re-auth),
+  and cookie-based login.
 - **Full token-derivation graph** — x\_token exchange, music\_token refresh,
   Passport cookie refresh (redirect-following), Quasar CSRF, Glagol device
   token, account info.
@@ -45,6 +47,34 @@ async def qr_login():
         print(f"Logged in as {info.display_login} (uid={info.uid})")
 ```
 
+### Device flow
+
+OAuth 2.0 Device Authorization Grant. The user opens `ya.ru/device`
+on any device, enters the short `user_code`, and the library receives
+an `x_token` plus a long-lived `refresh_token` for silent re-auth later.
+
+```python
+from ya_passport_auth import DeviceCodeSession, PassportClient
+
+async def device_login():
+    def on_code(session: DeviceCodeSession) -> None:
+        print(f"Open {session.verification_url} and enter: {session.user_code}")
+
+    async with PassportClient.create() as client:
+        creds = await client.login_device_code(on_code=on_code)
+        # creds.refresh_token is populated (only for this flow).
+        # Persist creds — the access token is valid for ~1 year.
+```
+
+After the x_token expires, mint a new one without user interaction:
+
+```python
+new_creds = await client.refresh_credentials(creds)
+```
+
+Only device-flow credentials carry a `refresh_token`; QR/cookie-login
+credentials have `refresh_token=None` and cannot be silently refreshed.
+
 ### Cookie login
 
 ```python
@@ -65,6 +95,7 @@ PassportClient  (public facade)
 │   └── AsyncMinDelayLimiter
 └── Flows
     ├── QrLoginFlow        → CSRF scrape → session create → poll → x_token
+    ├── DeviceCodeFlow     → device_code → ya.ru/device → x_token + refresh_token
     ├── CookieLoginFlow    → raw cookies → x_token
     ├── _token_exchange    → cookies→x_token, x_token→music_token  (shared)
     ├── PassportSessionRefresher  → x_token → session cookies (follows redirects)
@@ -82,6 +113,10 @@ PassportClient  (public facade)
 | `start_qr_login()` | Begin QR login, returns `QrSession` |
 | `poll_qr_until_confirmed(qr)` | Poll until scanned, returns `Credentials` |
 | `complete_qr_login(qr)` | Exchange confirmed QR for tokens |
+| `start_device_login(...)` | Begin Device Flow, returns `DeviceCodeSession` |
+| `poll_device_until_confirmed(session, ...)` | Poll until confirmed, returns `Credentials` |
+| `login_device_code(on_code=..., ...)` | Full Device Flow with callback |
+| `refresh_credentials(creds)` | Mint fresh `Credentials` via `refresh_token` |
 | `login_cookies(cookies)` | Exchange browser cookies for `Credentials` |
 | `refresh_music_token(x_token)` | x\_token → music\_token |
 | `refresh_passport_cookies(x_token)` | Refresh session cookies (follows redirect chain) |
@@ -103,9 +138,10 @@ Frozen, slotted dataclass returned by `poll_qr_until_confirmed()` and
 | Field | Type |
 |-------|------|
 | `x_token` | `SecretStr` |
-| `music_token` | `SecretStr` |
+| `music_token` | `SecretStr \| None` |
 | `uid` | `int \| None` |
-| `login` | `str \| None` |
+| `display_login` | `str \| None` |
+| `refresh_token` | `SecretStr \| None` (device flow only) |
 
 ### Exception hierarchy
 
@@ -118,7 +154,8 @@ YaPassportError
     ├── CsrfExtractionError
     ├── RateLimitedError
     ├── QRPendingError
-    └── QRTimeoutError
+    ├── QRTimeoutError
+    └── DeviceCodeTimeoutError
 ```
 
 ## Security

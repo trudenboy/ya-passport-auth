@@ -9,6 +9,7 @@ manage the session lifecycle explicitly via ``__aenter__``/``close``.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import time
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
@@ -17,24 +18,30 @@ import aiohttp
 
 from ya_passport_auth.config import ClientConfig
 from ya_passport_auth.credentials import Credentials, SecretStr
-from ya_passport_auth.exceptions import QRTimeoutError, YaPassportError
+from ya_passport_auth.exceptions import (
+    DeviceCodeTimeoutError,
+    InvalidCredentialsError,
+    QRTimeoutError,
+    YaPassportError,
+)
 from ya_passport_auth.flows._token_exchange import (
     exchange_cookies_for_x_token,
     exchange_x_token_for_music_token,
 )
 from ya_passport_auth.flows.account import AccountInfoFetcher
 from ya_passport_auth.flows.cookie_login import CookieLoginFlow
+from ya_passport_auth.flows.device_code import DeviceCodeFlow
 from ya_passport_auth.flows.glagol import GlagolDeviceTokenFetcher
 from ya_passport_auth.flows.qr import QrLoginFlow, QrSession
 from ya_passport_auth.flows.quasar import QuasarCsrfFetcher
 from ya_passport_auth.flows.session import PassportSessionRefresher
 from ya_passport_auth.http import SafeHttpClient
 from ya_passport_auth.logging import get_logger
-from ya_passport_auth.models import AccountInfo
+from ya_passport_auth.models import AccountInfo, DeviceCodeSession
 from ya_passport_auth.rate_limit import AsyncMinDelayLimiter
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
 __all__ = ["PassportClient"]
 
@@ -50,6 +57,7 @@ class PassportClient:
 
     __slots__ = (
         "_config",
+        "_device",
         "_http",
         "_owns_session",
         "_qr",
@@ -95,6 +103,7 @@ class PassportClient:
             limiter=limiter,
         )
         self._qr = QrLoginFlow(http=self._http, session=self._session)
+        self._device = DeviceCodeFlow(http=self._http)
 
     @classmethod
     @asynccontextmanager
@@ -167,8 +176,104 @@ class PassportClient:
         """
         flow = CookieLoginFlow(http=self._http)
         x_token = await flow.login(cookies)
-        music_token = await exchange_x_token_for_music_token(self._http, x_token)
-        return await self._build_credentials(x_token, music_token)
+        return await self._complete_auth_from_x_token(x_token)
+
+    # ------------------------------------------------------------------ #
+    # Device flow login
+    # ------------------------------------------------------------------ #
+    async def start_device_login(
+        self,
+        device_id: str | None = None,
+        device_name: str | None = None,
+    ) -> DeviceCodeSession:
+        """Request a device code; caller displays ``user_code`` to the user."""
+        return await self._device.request_code(device_id, device_name)
+
+    async def poll_device_until_confirmed(
+        self,
+        session: DeviceCodeSession,
+        *,
+        poll_interval: float | None = None,
+        total_timeout: float | None = None,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> Credentials:
+        """Poll until the device code is confirmed, then assemble credentials.
+
+        Defaults follow the server-provided ``interval`` and ``expires_in``
+        values from :class:`DeviceCodeSession`. Raises
+        :class:`DeviceCodeTimeoutError` if the deadline elapses and
+        :class:`InvalidCredentialsError` if ``should_cancel`` returns ``True``.
+        """
+        interval = session.interval if poll_interval is None else poll_interval
+        timeout = session.expires_in if total_timeout is None else total_timeout
+        if interval <= 0:
+            raise ValueError("poll_interval must be positive")
+        if timeout <= 0:
+            raise ValueError("total_timeout must be positive")
+
+        deadline = time.monotonic() + timeout
+        while True:
+            if should_cancel is not None and should_cancel():
+                raise InvalidCredentialsError("device login cancelled")
+
+            tokens = await self._device.poll_token(session.device_code)
+            if tokens is not None:
+                _log.info("Device code confirmed")
+                return await self._complete_auth_from_x_token(
+                    tokens.access_token,
+                    refresh_token=tokens.refresh_token,
+                )
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(interval, remaining))
+
+        raise DeviceCodeTimeoutError("device polling timed out")
+
+    async def login_device_code(
+        self,
+        *,
+        on_code: Callable[[DeviceCodeSession], None | Awaitable[None]],
+        poll_interval: float | None = None,
+        total_timeout: float | None = None,
+        should_cancel: Callable[[], bool] | None = None,
+        device_id: str | None = None,
+        device_name: str | None = None,
+    ) -> Credentials:
+        """Run the full OAuth Device Flow end-to-end.
+
+        ``on_code`` is invoked once with the :class:`DeviceCodeSession` so the
+        caller can display ``session.user_code`` and ``session.verification_url``.
+        Both sync callbacks and coroutines are supported.
+        """
+        session = await self.start_device_login(device_id, device_name)
+
+        result = on_code(session)
+        if inspect.isawaitable(result):
+            await result
+
+        return await self.poll_device_until_confirmed(
+            session,
+            poll_interval=poll_interval,
+            total_timeout=total_timeout,
+            should_cancel=should_cancel,
+        )
+
+    async def refresh_credentials(self, credentials: Credentials) -> Credentials:
+        """Mint a new x_token from a stored refresh_token.
+
+        Only device-flow credentials carry a refresh_token; QR/cookie-login
+        credentials have ``refresh_token=None`` and cannot be refreshed
+        without repeating the original login.
+        """
+        if credentials.refresh_token is None:
+            raise InvalidCredentialsError("credentials have no refresh_token")
+        tokens = await self._device.refresh(credentials.refresh_token)
+        return await self._complete_auth_from_x_token(
+            tokens.access_token,
+            refresh_token=tokens.refresh_token,
+        )
 
     # ------------------------------------------------------------------ #
     # Token ops
@@ -223,13 +328,33 @@ class PassportClient:
         not handle the raw-cookie login path used by ``login_cookies()``.
         """
         x_token = await exchange_cookies_for_x_token(self._http, self._session)
+        return await self._complete_auth_from_x_token(x_token)
+
+    async def _complete_auth_from_x_token(
+        self,
+        x_token: SecretStr,
+        *,
+        refresh_token: SecretStr | None = None,
+    ) -> Credentials:
+        """Exchange x_token → music_token, fetch account info, assemble creds.
+
+        Shared tail of every login path. Cookie-based flows reach this via
+        :meth:`_complete_auth`; device-flow and refresh reach it directly
+        because they already hold an x_token.
+        """
         music_token = await exchange_x_token_for_music_token(self._http, x_token)
-        return await self._build_credentials(x_token, music_token)
+        return await self._build_credentials(
+            x_token,
+            music_token,
+            refresh_token=refresh_token,
+        )
 
     async def _build_credentials(
         self,
         x_token: SecretStr,
         music_token: SecretStr,
+        *,
+        refresh_token: SecretStr | None = None,
     ) -> Credentials:
         """Fetch optional account info and assemble :class:`Credentials`."""
         try:
@@ -246,6 +371,7 @@ class PassportClient:
             music_token=music_token,
             uid=uid,
             display_login=login,
+            refresh_token=refresh_token,
         )
 
     # ------------------------------------------------------------------ #

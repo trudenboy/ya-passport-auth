@@ -30,6 +30,7 @@ from ya_passport_auth.credentials import Credentials, SecretStr
 __all__ = [
     "AuthFailedError",
     "CsrfExtractionError",
+    "DeviceCodeTimeoutError",
     "InvalidCredentialsError",
     "NetworkError",
     "QRPendingError",
@@ -114,3 +115,7 @@ class QRPendingError(AuthFailedError):
 
 class QRTimeoutError(AuthFailedError):
     """QR polling loop expired without confirmation."""
+
+
+class DeviceCodeTimeoutError(AuthFailedError):
+    """Device-code polling expired (server ``expired_token`` or local deadline)."""
