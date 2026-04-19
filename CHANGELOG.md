@@ -25,7 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `None` (backwards compatible for QR/cookie callers).
 - `DeviceCodeTimeoutError` exception (subclass of `AuthFailedError`).
 - `DEVICE_CODE_URL`, `OAUTH_TOKEN_URL` constants.
-- 35 new tests (23 unit + 12 integration + log-leak/repr additions).
+- RFC 8628 §3.5 `slow_down` handling — `poll_device_until_confirmed()`
+  increases the poll interval by 5 s when the server asks the client to
+  back off, instead of aborting with `AuthFailedError`.
+- 37 new tests (24 unit + 13 integration + log-leak/repr additions).
 
 ### Verified
 

@@ -24,7 +24,7 @@ from ya_passport_auth.exceptions import (
     InvalidCredentialsError,
     NetworkError,
 )
-from ya_passport_auth.flows.device_code import DeviceCodeFlow
+from ya_passport_auth.flows.device_code import DeviceCodeFlow, PollOutcome
 from ya_passport_auth.http import SafeHttpClient
 from ya_passport_auth.models import DeviceCodeSession, OAuthTokens
 from ya_passport_auth.rate_limit import AsyncMinDelayLimiter
@@ -230,7 +230,7 @@ class TestPollToken:
         assert _form_field(calls[0].kwargs, "client_id") == PASSPORT_CLIENT_ID
         assert _form_field(calls[0].kwargs, "client_secret") == PASSPORT_CLIENT_SECRET
 
-    async def test_authorization_pending_returns_none(self, flow: DeviceCodeFlow) -> None:
+    async def test_authorization_pending_returns_pending(self, flow: DeviceCodeFlow) -> None:
         with aioresponses() as m:
             m.post(
                 OAUTH_TOKEN_URL,
@@ -243,7 +243,19 @@ class TestPollToken:
             )
             result = await flow.poll_token(SecretStr(_TEST_DEVICE_CODE))
 
-        assert result is None
+        assert result is PollOutcome.PENDING
+
+    async def test_slow_down_returns_slow_down(self, flow: DeviceCodeFlow) -> None:
+        with aioresponses() as m:
+            m.post(
+                OAUTH_TOKEN_URL,
+                status=400,
+                payload={"error": "slow_down"},
+                headers=_JSON_CT,
+            )
+            result = await flow.poll_token(SecretStr(_TEST_DEVICE_CODE))
+
+        assert result is PollOutcome.SLOW_DOWN
 
     async def test_expired_token_raises_timeout(self, flow: DeviceCodeFlow) -> None:
         with aioresponses() as m:

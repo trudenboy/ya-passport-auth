@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import secrets
 import string
+from enum import Enum
 from typing import TYPE_CHECKING, Final
 
 from ya_passport_auth.constants import (
@@ -35,7 +36,21 @@ from ya_passport_auth.models import DeviceCodeSession, OAuthTokens
 if TYPE_CHECKING:
     from ya_passport_auth.http import SafeHttpClient
 
-__all__ = ["DeviceCodeFlow"]
+__all__ = ["DeviceCodeFlow", "PollOutcome"]
+
+
+class PollOutcome(Enum):
+    """Non-terminal outcomes of a single device-code poll.
+
+    ``PENDING`` means the user has not yet confirmed the code; the caller
+    should keep polling at the current interval. ``SLOW_DOWN`` (RFC 8628
+    §3.5) means the client is polling too fast and must increase its
+    interval by at least five seconds for this and all subsequent requests.
+    """
+
+    PENDING = "authorization_pending"
+    SLOW_DOWN = "slow_down"
+
 
 _log = get_logger("device_code")
 
@@ -133,11 +148,13 @@ class DeviceCodeFlow:
             interval=interval,
         )
 
-    async def poll_token(self, device_code: SecretStr) -> OAuthTokens | None:
+    async def poll_token(self, device_code: SecretStr) -> OAuthTokens | PollOutcome:
         """Poll the token endpoint once.
 
-        Returns :class:`OAuthTokens` when the user has confirmed, or
-        ``None`` while the request is still ``authorization_pending``.
+        Returns :class:`OAuthTokens` when the user has confirmed, or a
+        :class:`PollOutcome` member describing the non-terminal state:
+        ``PENDING`` for ``authorization_pending`` or ``SLOW_DOWN`` when
+        RFC 8628 §3.5 asks the caller to back off.
 
         Raises:
             DeviceCodeTimeoutError: Server reported ``expired_token``.
@@ -194,7 +211,7 @@ class DeviceCodeFlow:
         return tokens
 
 
-def _parse_token_response(data: dict[str, object]) -> OAuthTokens | None:
+def _parse_token_response(data: dict[str, object]) -> OAuthTokens | PollOutcome:
     """Dispatch a parsed ``/token`` response for the device_code grant."""
     if "access_token" in data:
         tokens = _build_tokens(data)
@@ -213,7 +230,9 @@ def _parse_token_response(data: dict[str, object]) -> OAuthTokens | None:
         )
 
     if error == "authorization_pending":
-        return None
+        return PollOutcome.PENDING
+    if error == "slow_down":
+        return PollOutcome.SLOW_DOWN
     if error == "expired_token":
         raise DeviceCodeTimeoutError(
             "device code expired",

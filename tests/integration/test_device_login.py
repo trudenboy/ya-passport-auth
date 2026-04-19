@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import logging
 
 import pytest
 from aioresponses import aioresponses
@@ -16,10 +16,6 @@ from ya_passport_auth.exceptions import (
     InvalidCredentialsError,
 )
 from ya_passport_auth.models import DeviceCodeSession
-
-if TYPE_CHECKING:
-    pass
-
 
 _PROXY = "https://mobileproxy.passport.yandex.net"
 _SHORT_INFO = f"{_PROXY}/1/bundle/account/short_info/?avatar_size=islands-300"
@@ -78,6 +74,15 @@ def _mock_token_pending(m: aioresponses) -> None:
         OAUTH_TOKEN_URL,
         status=400,
         payload={"error": "authorization_pending"},
+        headers=_JSON_CT,
+    )
+
+
+def _mock_token_slow_down(m: aioresponses) -> None:
+    m.post(
+        OAUTH_TOKEN_URL,
+        status=400,
+        payload={"error": "slow_down"},
         headers=_JSON_CT,
     )
 
@@ -176,6 +181,25 @@ class TestPollDeviceUntilConfirmed:
                 creds = await client.poll_device_until_confirmed(session, poll_interval=0.001)
 
         assert creds.x_token.get_secret() == _TEST_ACCESS_TOKEN
+
+    async def test_slow_down_does_not_abort(self, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.WARNING, logger="ya_passport_auth")
+
+        async with PassportClient.create(config=_fast_config()) as client:
+            with aioresponses() as m:
+                _mock_device_code_success(m)
+                session = await client.start_device_login()
+                _mock_token_slow_down(m)
+                _mock_token_pending(m)
+                _mock_token_success(m)
+                _mock_music_exchange(m)
+                _mock_short_info(m)
+                creds = await client.poll_device_until_confirmed(session, poll_interval=0.001)
+
+        assert creds.x_token.get_secret() == _TEST_ACCESS_TOKEN
+        assert any("slow_down" in r.getMessage() for r in caplog.records), (
+            "slow_down should be logged at WARNING level"
+        )
 
     async def test_timeout(self) -> None:
         async with PassportClient.create(config=_fast_config()) as client:

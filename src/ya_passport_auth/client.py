@@ -12,7 +12,7 @@ import asyncio
 import inspect
 import time
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import aiohttp
 
@@ -30,14 +30,14 @@ from ya_passport_auth.flows._token_exchange import (
 )
 from ya_passport_auth.flows.account import AccountInfoFetcher
 from ya_passport_auth.flows.cookie_login import CookieLoginFlow
-from ya_passport_auth.flows.device_code import DeviceCodeFlow
+from ya_passport_auth.flows.device_code import DeviceCodeFlow, PollOutcome
 from ya_passport_auth.flows.glagol import GlagolDeviceTokenFetcher
 from ya_passport_auth.flows.qr import QrLoginFlow, QrSession
 from ya_passport_auth.flows.quasar import QuasarCsrfFetcher
 from ya_passport_auth.flows.session import PassportSessionRefresher
 from ya_passport_auth.http import SafeHttpClient
 from ya_passport_auth.logging import get_logger
-from ya_passport_auth.models import AccountInfo, DeviceCodeSession
+from ya_passport_auth.models import AccountInfo, DeviceCodeSession, OAuthTokens
 from ya_passport_auth.rate_limit import AsyncMinDelayLimiter
 
 if TYPE_CHECKING:
@@ -46,6 +46,10 @@ if TYPE_CHECKING:
 __all__ = ["PassportClient"]
 
 _log = get_logger("client")
+
+# RFC 8628 §3.5: on ``slow_down`` the client MUST increase its polling
+# interval by at least 5 seconds for this and all subsequent requests.
+_SLOW_DOWN_INCREMENT_S: Final = 5.0
 
 
 class PassportClient:
@@ -216,13 +220,16 @@ class PassportClient:
             if should_cancel is not None and should_cancel():
                 raise InvalidCredentialsError("device login cancelled")
 
-            tokens = await self._device.poll_token(session.device_code)
-            if tokens is not None:
+            result = await self._device.poll_token(session.device_code)
+            if isinstance(result, OAuthTokens):
                 _log.info("Device code confirmed")
                 return await self._complete_auth_from_x_token(
-                    tokens.access_token,
-                    refresh_token=tokens.refresh_token,
+                    result.access_token,
+                    refresh_token=result.refresh_token,
                 )
+            if result is PollOutcome.SLOW_DOWN:
+                interval += _SLOW_DOWN_INCREMENT_S
+                _log.warning("slow_down received; increasing poll interval to %.1fs", interval)
 
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -338,9 +345,10 @@ class PassportClient:
     ) -> Credentials:
         """Exchange x_token → music_token, fetch account info, assemble creds.
 
-        Shared tail of every login path. Cookie-based flows reach this via
-        :meth:`_complete_auth`; device-flow and refresh reach it directly
-        because they already hold an x_token.
+        Shared tail for auth flows that already hold an ``x_token``. QR and
+        other session-cookie flows reach this via :meth:`_complete_auth`,
+        while raw-cookie login, device-flow, and refresh-based paths may
+        call it directly.
         """
         music_token = await exchange_x_token_for_music_token(self._http, x_token)
         return await self._build_credentials(
