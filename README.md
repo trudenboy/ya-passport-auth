@@ -22,7 +22,7 @@
 - **Async-native** — built on `aiohttp` with `asyncio.Lock`-protected
   rate limiter and connection management.
 - **Strictly typed** — `mypy --strict` clean, PEP 561 `py.typed` marker.
-- **Well tested** — 221 tests, 97.8 % branch coverage.
+- **Well tested** — 260 tests, 98.1 % branch coverage.
 
 ## Installation
 
