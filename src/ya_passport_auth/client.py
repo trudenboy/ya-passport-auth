@@ -220,6 +220,10 @@ class PassportClient:
             if should_cancel is not None and should_cancel():
                 raise InvalidCredentialsError("device login cancelled")
 
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise DeviceCodeTimeoutError("device polling timed out")
+
             result = await self._device.poll_token(session.device_code)
             if isinstance(result, OAuthTokens):
                 _log.info("Device code confirmed")
@@ -239,10 +243,8 @@ class PassportClient:
 
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                break
+                raise DeviceCodeTimeoutError("device polling timed out")
             await asyncio.sleep(min(interval, remaining))
-
-        raise DeviceCodeTimeoutError("device polling timed out")
 
     async def login_device_code(
         self,

@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - RFC 8628 §3.5 `slow_down` handling — `poll_device_until_confirmed()`
   increases the poll interval by 5 s when the server asks the client to
   back off, instead of aborting with `AuthFailedError`.
-- 37 new tests (24 unit + 13 integration + log-leak/repr additions).
+- 42 new tests (24 unit + 14 integration + 4 log-leak/repr additions).
 
 ### Verified
 
