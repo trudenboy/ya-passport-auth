@@ -106,7 +106,11 @@ class PassportClient:
             config=self._config,
             limiter=limiter,
         )
-        self._qr = QrLoginFlow(http=self._http, session=self._session)
+        self._qr = QrLoginFlow(
+            http=self._http,
+            session=self._session,
+            config=self._config,
+        )
         self._device = DeviceCodeFlow(http=self._http)
 
     @classmethod

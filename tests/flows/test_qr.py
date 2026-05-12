@@ -1,8 +1,9 @@
 """Tests for the QR login flow.
 
-Covers CSRF extraction (4 pattern variants + missing), QR session
-creation, and QR status polling. Token exchange tests live in
-``test_token_exchange.py``.
+Covers CSRF extraction (5 pattern variants + missing), QR session
+creation against the ``/pwl-yandex`` BFF, and QR status polling
+including the ``sessions/get_session`` follow-up. Token exchange
+tests live in ``test_token_exchange.py``.
 """
 
 from __future__ import annotations
@@ -30,14 +31,16 @@ from ya_passport_auth.rate_limit import AsyncMinDelayLimiter
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 
-_AM_URL = f"{PASSPORT_URL}/am?app_platform=android"
-_MULTISTEP_URL = f"{PASSPORT_BFF_URL}/auth/multistep_start"
+_AM_URL = f"{PASSPORT_URL}/pwl-yandex"
 _SUBMIT_URL = f"{PASSPORT_BFF_URL}/auth/password/submit"
-_STATUS_URL = f"{PASSPORT_URL}/auth/new/magic/status/"
+_MAGIC_CODE_URL = f"{PASSPORT_BFF_URL}/auth/magic/code"
+_STATUS_URL = f"{PASSPORT_BFF_URL}/auth/magic/code/status"
+_GET_SESSION_URL = f"{PASSPORT_BFF_URL}/sessions/get_session"
 
 _TEST_TRACK_ID = "test-track-id-0123456789"
+_TEST_SESSION_TRACK_ID = "test-session-track-id-9876543210"
 _TEST_PAGE_CSRF_INPUT = "test-csrf-input-attr-01234567890"
-_TEST_SUBMIT_CSRF = "test-submit-csrf-abcdef0123456789"
+_TEST_QR_LINK = f"{PASSPORT_URL}/auth/magic/code/?track_id={_TEST_TRACK_ID}"
 
 _JSON_CT = {"Content-Type": "application/json"}
 _HTML_CT = {"Content-Type": "text/html; charset=utf-8"}
@@ -62,8 +65,21 @@ def http(session: aiohttp.ClientSession, config: ClientConfig) -> SafeHttpClient
 
 
 @pytest.fixture
-def flow(http: SafeHttpClient, session: aiohttp.ClientSession) -> QrLoginFlow:
-    return QrLoginFlow(http=http, session=session)
+def flow(
+    http: SafeHttpClient,
+    session: aiohttp.ClientSession,
+    config: ClientConfig,
+) -> QrLoginFlow:
+    return QrLoginFlow(http=http, session=session, config=config)
+
+
+def _submit_payload(track_id: str = _TEST_TRACK_ID) -> dict[str, object]:
+    """Realistic password/submit response shape (server returns more fields)."""
+    return {
+        "track_id": track_id,
+        "status": "ok",
+        "csrf_token": "server-side-per-track-token-not-used-by-client",
+    }
 
 
 # ------------------------------------------------------------------ #
@@ -77,6 +93,7 @@ class TestCsrfExtraction:
             ("csrf_js_single.html", "test-csrf-js-single-01234567890"),
             ("csrf_json_script.html", "test-csrf-json-script-01234567890"),
             ("csrf_window_global.html", "test-csrf-window-global-01234567890"),
+            ("csrf_bare_global.html", "test-csrf-bare-global-0123456789"),
         ],
     )
     async def test_csrf_patterns(
@@ -85,31 +102,25 @@ class TestCsrfExtraction:
         html = (FIXTURES / fixture_file).read_text()
         with aioresponses() as m:
             m.get(_AM_URL, status=200, body=html, headers=_HTML_CT)
+            m.post(_SUBMIT_URL, status=200, payload=_submit_payload(), headers=_JSON_CT)
             m.post(
-                _MULTISTEP_URL,
+                _MAGIC_CODE_URL,
                 status=200,
-                payload={"track_id": _TEST_TRACK_ID},
-                headers=_JSON_CT,
-            )
-            m.post(
-                _SUBMIT_URL,
-                status=200,
-                payload={"csrf_token": _TEST_SUBMIT_CSRF},
+                payload={"link": _TEST_QR_LINK},
                 headers=_JSON_CT,
             )
             qr = await flow.get_qr()
 
-            # Verify the extracted page CSRF was sent as X-CSRF-Token on
-            # both BFF calls (multistep_start and password/submit).
-            multistep_calls = m.requests[("POST", URL(_MULTISTEP_URL))]
+            # Page CSRF must propagate as X-CSRF-Token on BOTH BFF calls.
             submit_calls = m.requests[("POST", URL(_SUBMIT_URL))]
-            assert multistep_calls[0].kwargs["headers"]["X-CSRF-Token"] == expected_csrf
+            magic_calls = m.requests[("POST", URL(_MAGIC_CODE_URL))]
             assert submit_calls[0].kwargs["headers"]["X-CSRF-Token"] == expected_csrf
+            assert magic_calls[0].kwargs["headers"]["X-CSRF-Token"] == expected_csrf
 
         assert qr.track_id == _TEST_TRACK_ID
-        # The per-track csrf_token returned by submit is what the poll
-        # endpoint consumes — not the page CSRF.
-        assert qr.csrf_token == _TEST_SUBMIT_CSRF
+        # The page-level CSRF is what poll requests will carry in the header.
+        assert qr.csrf_token == expected_csrf
+        assert qr.qr_url == _TEST_QR_LINK
 
     async def test_csrf_missing_raises(self, flow: QrLoginFlow) -> None:
         html = (FIXTURES / "csrf_missing.html").read_text()
@@ -127,102 +138,121 @@ class TestGetQr:
         html = (FIXTURES / "csrf_input_attr.html").read_text()
         with aioresponses() as m:
             m.get(_AM_URL, status=200, body=html, headers=_HTML_CT)
+            m.post(_SUBMIT_URL, status=200, payload=_submit_payload(), headers=_JSON_CT)
             m.post(
-                _MULTISTEP_URL,
+                _MAGIC_CODE_URL,
                 status=200,
-                payload={
-                    "track_id": _TEST_TRACK_ID,
-                    "auth_methods": ["password", "magic_x_token"],
-                },
-                headers=_JSON_CT,
-            )
-            m.post(
-                _SUBMIT_URL,
-                status=200,
-                payload={
-                    "track_id": _TEST_TRACK_ID,
-                    "csrf_token": _TEST_SUBMIT_CSRF,
-                    "user_code": "1234567890",
-                    "expires_in": 300,
-                },
+                payload={"link": _TEST_QR_LINK},
                 headers=_JSON_CT,
             )
             qr = await flow.get_qr()
 
         assert isinstance(qr, QrSession)
         assert qr.track_id == _TEST_TRACK_ID
-        assert qr.csrf_token == _TEST_SUBMIT_CSRF
-        assert f"track_id={_TEST_TRACK_ID}" in qr.qr_url
+        assert qr.csrf_token == _TEST_PAGE_CSRF_INPUT
+        assert qr.qr_url == _TEST_QR_LINK
+        # auth_state preserves the full submit response so polling can replay it.
+        state_dict = dict(qr.auth_state)
+        assert state_dict["track_id"] == _TEST_TRACK_ID
+        assert state_dict["status"] == "ok"
 
-    async def test_multistep_missing_track_id_raises(self, flow: QrLoginFlow) -> None:
+    async def test_submit_sends_json_body(self, flow: QrLoginFlow) -> None:
         html = (FIXTURES / "csrf_input_attr.html").read_text()
         with aioresponses() as m:
             m.get(_AM_URL, status=200, body=html, headers=_HTML_CT)
+            m.post(_SUBMIT_URL, status=200, payload=_submit_payload(), headers=_JSON_CT)
             m.post(
-                _MULTISTEP_URL,
+                _MAGIC_CODE_URL,
                 status=200,
-                payload={"auth_methods": ["password"]},
+                payload={"link": _TEST_QR_LINK},
                 headers=_JSON_CT,
             )
-            with pytest.raises(AuthFailedError):
+            await flow.get_qr()
+
+            submit_calls = m.requests[("POST", URL(_SUBMIT_URL))]
+            # password/submit must send JSON body containing retpath
+            # (aioresponses preserves the json= kwarg verbatim).
+            assert submit_calls[0].kwargs["json"] == {"retpath": f"{PASSPORT_URL}/profile"}
+            assert submit_calls[0].kwargs["data"] is None
+
+    async def test_magic_code_sends_form_data(self, flow: QrLoginFlow) -> None:
+        html = (FIXTURES / "csrf_input_attr.html").read_text()
+        with aioresponses() as m:
+            m.get(_AM_URL, status=200, body=html, headers=_HTML_CT)
+            m.post(_SUBMIT_URL, status=200, payload=_submit_payload(), headers=_JSON_CT)
+            m.post(
+                _MAGIC_CODE_URL,
+                status=200,
+                payload={"link": _TEST_QR_LINK},
+                headers=_JSON_CT,
+            )
+            await flow.get_qr()
+
+            magic_calls = m.requests[("POST", URL(_MAGIC_CODE_URL))]
+            assert magic_calls[0].kwargs["data"] == {
+                "location_id": "0",
+                "magic_track_id": _TEST_TRACK_ID,
+                "track_id": "",
+            }
+            assert magic_calls[0].kwargs["json"] is None
+
+    async def test_submit_missing_track_id_raises(self, flow: QrLoginFlow) -> None:
+        html = (FIXTURES / "csrf_input_attr.html").read_text()
+        with aioresponses() as m:
+            m.get(_AM_URL, status=200, body=html, headers=_HTML_CT)
+            m.post(_SUBMIT_URL, status=200, payload={"status": "ok"}, headers=_JSON_CT)
+            with pytest.raises(AuthFailedError, match="track_id"):
                 await flow.get_qr()
 
-    async def test_submit_status_error_raises(self, flow: QrLoginFlow) -> None:
+    async def test_submit_empty_track_id_raises(self, flow: QrLoginFlow) -> None:
         html = (FIXTURES / "csrf_input_attr.html").read_text()
         with aioresponses() as m:
             m.get(_AM_URL, status=200, body=html, headers=_HTML_CT)
-            m.post(
-                _MULTISTEP_URL,
-                status=200,
-                payload={"track_id": _TEST_TRACK_ID},
-                headers=_JSON_CT,
-            )
             m.post(
                 _SUBMIT_URL,
                 status=200,
-                payload={"status": "error", "errors": ["captcha"]},
+                payload={"track_id": "   "},
                 headers=_JSON_CT,
             )
-            with pytest.raises(AuthFailedError, match="status='error'"):
+            with pytest.raises(AuthFailedError, match="track_id"):
                 await flow.get_qr()
 
-    async def test_submit_unexpected_status_raises(self, flow: QrLoginFlow) -> None:
-        """Non-ok status like 'captcha' must not fall through to csrf_token check."""
+    async def test_magic_code_missing_link_raises(self, flow: QrLoginFlow) -> None:
         html = (FIXTURES / "csrf_input_attr.html").read_text()
         with aioresponses() as m:
             m.get(_AM_URL, status=200, body=html, headers=_HTML_CT)
-            m.post(
-                _MULTISTEP_URL,
-                status=200,
-                payload={"track_id": _TEST_TRACK_ID},
-                headers=_JSON_CT,
-            )
-            m.post(
-                _SUBMIT_URL,
-                status=200,
-                payload={"status": "captcha", "captcha_url": "https://example.com/c"},
-                headers=_JSON_CT,
-            )
-            with pytest.raises(AuthFailedError, match="status='captcha'"):
+            m.post(_SUBMIT_URL, status=200, payload=_submit_payload(), headers=_JSON_CT)
+            m.post(_MAGIC_CODE_URL, status=200, payload={}, headers=_JSON_CT)
+            with pytest.raises(AuthFailedError, match="link"):
                 await flow.get_qr()
 
-    async def test_submit_missing_csrf_raises(self, flow: QrLoginFlow) -> None:
+    async def test_link_with_disallowed_host_raises(self, flow: QrLoginFlow) -> None:
+        """A malicious server response substituting a phishing URL must be rejected."""
         html = (FIXTURES / "csrf_input_attr.html").read_text()
         with aioresponses() as m:
             m.get(_AM_URL, status=200, body=html, headers=_HTML_CT)
+            m.post(_SUBMIT_URL, status=200, payload=_submit_payload(), headers=_JSON_CT)
             m.post(
-                _MULTISTEP_URL,
+                _MAGIC_CODE_URL,
                 status=200,
-                payload={"track_id": _TEST_TRACK_ID},
+                payload={"link": "https://evil.example.com/phish"},
                 headers=_JSON_CT,
             )
+            with pytest.raises(AuthFailedError, match="allow-list"):
+                await flow.get_qr()
+
+    async def test_link_with_non_https_scheme_raises(self, flow: QrLoginFlow) -> None:
+        html = (FIXTURES / "csrf_input_attr.html").read_text()
+        with aioresponses() as m:
+            m.get(_AM_URL, status=200, body=html, headers=_HTML_CT)
+            m.post(_SUBMIT_URL, status=200, payload=_submit_payload(), headers=_JSON_CT)
             m.post(
-                _SUBMIT_URL,
+                _MAGIC_CODE_URL,
                 status=200,
-                payload={"track_id": _TEST_TRACK_ID},
+                payload={"link": "http://passport.yandex.ru/insecure"},
                 headers=_JSON_CT,
             )
-            with pytest.raises(AuthFailedError):
+            with pytest.raises(AuthFailedError, match="non-HTTPS"):
                 await flow.get_qr()
 
 
@@ -230,24 +260,75 @@ class TestGetQr:
 # QR status check
 # ------------------------------------------------------------------ #
 class TestCheckStatus:
+    def _make_qr(self) -> QrSession:
+        return QrSession(
+            track_id=_TEST_TRACK_ID,
+            csrf_token=_TEST_PAGE_CSRF_INPUT,
+            qr_url=_TEST_QR_LINK,
+            auth_state=tuple(_submit_payload().items()),
+        )
+
     async def test_pending(self, flow: QrLoginFlow) -> None:
-        qr = QrSession(track_id=_TEST_TRACK_ID, csrf_token=_TEST_SUBMIT_CSRF, qr_url="http://x")
+        qr = self._make_qr()
         with aioresponses() as m:
             m.post(
                 _STATUS_URL,
                 status=200,
-                payload={"status": "pending"},
+                payload={"state": "auth_wait_user_action"},
                 headers=_JSON_CT,
             )
             assert await flow.check_status(qr) is False
 
-    async def test_ok(self, flow: QrLoginFlow) -> None:
-        qr = QrSession(track_id=_TEST_TRACK_ID, csrf_token=_TEST_SUBMIT_CSRF, qr_url="http://x")
+    async def test_ok_triggers_get_session(self, flow: QrLoginFlow) -> None:
+        qr = self._make_qr()
         with aioresponses() as m:
             m.post(
                 _STATUS_URL,
                 status=200,
-                payload={"status": "ok"},
+                payload={
+                    "state": "otp_auth_finished",
+                    "trackId": _TEST_SESSION_TRACK_ID,
+                },
                 headers=_JSON_CT,
             )
+            m.post(_GET_SESSION_URL, status=200, payload={"status": "ok"}, headers=_JSON_CT)
             assert await flow.check_status(qr) is True
+
+            status_calls = m.requests[("POST", URL(_STATUS_URL))]
+            get_session_calls = m.requests[("POST", URL(_GET_SESSION_URL))]
+            # check_status forwards the full auth_state as JSON.
+            assert status_calls[0].kwargs["json"] == dict(_submit_payload().items())
+            assert status_calls[0].kwargs["headers"]["X-CSRF-Token"] == _TEST_PAGE_CSRF_INPUT
+            # get_session uses the session-scope trackId from the status response.
+            assert get_session_calls[0].kwargs["data"] == {"track_id": _TEST_SESSION_TRACK_ID}
+
+    async def test_ok_missing_track_id_raises(self, flow: QrLoginFlow) -> None:
+        qr = self._make_qr()
+        with aioresponses() as m:
+            m.post(
+                _STATUS_URL,
+                status=200,
+                payload={"state": "otp_auth_finished"},
+                headers=_JSON_CT,
+            )
+            with pytest.raises(AuthFailedError, match="trackId"):
+                await flow.check_status(qr)
+
+
+# ------------------------------------------------------------------ #
+# QrSession redaction
+# ------------------------------------------------------------------ #
+class TestQrSessionRepr:
+    def test_repr_redacts_csrf_and_auth_state(self) -> None:
+        qr = QrSession(
+            track_id="visible-track-id",
+            csrf_token="SUPER-SECRET-CSRF",
+            qr_url="https://passport.yandex.ru/auth/magic/code/?track_id=visible",
+            auth_state=(("server_token", "SUPER-SECRET-SERVER-TOKEN"),),
+        )
+        r = repr(qr)
+        assert "SUPER-SECRET-CSRF" not in r
+        assert "SUPER-SECRET-SERVER-TOKEN" not in r
+        # Non-secret fields are visible for debugging.
+        assert "visible-track-id" in r
+        assert "visible" in r

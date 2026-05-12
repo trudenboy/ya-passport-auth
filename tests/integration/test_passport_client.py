@@ -55,35 +55,37 @@ class TestPassportClientCreate:
         await client.close()
 
 
+_TEST_SESSION_TRACK_ID = "test-session-track-id-facade"
+_AUTH_STATE = (("track_id", _TEST_TRACK_ID), ("status", "ok"))
+_QR_LINK = f"{_PASSPORT}/auth/magic/code/?track_id={_TEST_TRACK_ID}"
+
+
 class TestQrLoginIntegration:
     async def test_start_qr_login(self) -> None:
         html = (FIXTURES / "csrf_input_attr.html").read_text()
         async with PassportClient.create(config=_fast_config()) as client:
             with aioresponses() as m:
                 m.get(
-                    f"{_PASSPORT}/am?app_platform=android",
+                    f"{_PASSPORT}/pwl-yandex",
                     status=200,
                     body=html,
                     headers=_HTML_CT,
                 )
                 m.post(
-                    f"{_BFF}/auth/multistep_start",
+                    f"{_BFF}/auth/password/submit",
                     status=200,
-                    payload={"track_id": _TEST_TRACK_ID},
+                    payload={"track_id": _TEST_TRACK_ID, "status": "ok"},
                     headers=_JSON_CT,
                 )
                 m.post(
-                    f"{_BFF}/auth/password/submit",
+                    f"{_BFF}/auth/magic/code",
                     status=200,
-                    payload={
-                        "track_id": _TEST_TRACK_ID,
-                        "csrf_token": _TEST_CSRF,
-                    },
+                    payload={"link": _QR_LINK},
                     headers=_JSON_CT,
                 )
                 qr = await client.start_qr_login()
             assert qr.track_id == _TEST_TRACK_ID
-            assert "track_id=" in qr.qr_url
+            assert qr.qr_url == _QR_LINK
 
     async def test_poll_zero_interval_raises(self) -> None:
         async with PassportClient.create(config=_fast_config()) as client:
@@ -91,6 +93,7 @@ class TestQrLoginIntegration:
                 track_id=_TEST_TRACK_ID,
                 csrf_token=_TEST_CSRF,
                 qr_url="http://x",
+                auth_state=_AUTH_STATE,
             )
             with pytest.raises(ValueError, match="poll_interval must be positive"):
                 await client.poll_qr_until_confirmed(qr, poll_interval=0.0)
@@ -101,6 +104,7 @@ class TestQrLoginIntegration:
                 track_id=_TEST_TRACK_ID,
                 csrf_token=_TEST_CSRF,
                 qr_url="http://x",
+                auth_state=_AUTH_STATE,
             )
             with pytest.raises(ValueError, match="total_timeout must be positive"):
                 await client.poll_qr_until_confirmed(qr, total_timeout=0.0)
@@ -111,14 +115,15 @@ class TestQrLoginIntegration:
                 track_id=_TEST_TRACK_ID,
                 csrf_token=_TEST_CSRF,
                 qr_url="http://x",
+                auth_state=_AUTH_STATE,
             )
             with aioresponses() as m:
                 # Return "pending" many times — enough to exhaust the timeout.
                 for _ in range(20):
                     m.post(
-                        f"{_PASSPORT}/auth/new/magic/status/",
+                        f"{_BFF}/auth/magic/code/status",
                         status=200,
-                        payload={"status": "pending"},
+                        payload={"state": "auth_wait_user_action"},
                         headers=_JSON_CT,
                     )
                 with pytest.raises(QRTimeoutError):
@@ -134,17 +139,28 @@ class TestQrLoginIntegration:
                 track_id=_TEST_TRACK_ID,
                 csrf_token=_TEST_CSRF,
                 qr_url="http://x",
+                auth_state=_AUTH_STATE,
             )
             with aioresponses() as m:
-                # First poll: pending. Second: ok.
+                # First poll: pending. Second: confirmed.
                 m.post(
-                    f"{_PASSPORT}/auth/new/magic/status/",
+                    f"{_BFF}/auth/magic/code/status",
                     status=200,
-                    payload={"status": "pending"},
+                    payload={"state": "auth_wait_user_action"},
                     headers=_JSON_CT,
                 )
                 m.post(
-                    f"{_PASSPORT}/auth/new/magic/status/",
+                    f"{_BFF}/auth/magic/code/status",
+                    status=200,
+                    payload={
+                        "state": "otp_auth_finished",
+                        "trackId": _TEST_SESSION_TRACK_ID,
+                    },
+                    headers=_JSON_CT,
+                )
+                # session deposit (cookies are pre-seeded above)
+                m.post(
+                    f"{_BFF}/sessions/get_session",
                     status=200,
                     payload={"status": "ok"},
                     headers=_JSON_CT,
