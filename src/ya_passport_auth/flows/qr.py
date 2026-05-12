@@ -188,14 +188,31 @@ class QrLoginFlow:
         On confirmation, also calls ``sessions/get_session`` to deposit
         session cookies into the jar before returning — so the caller can
         proceed directly to ``exchange_cookies_for_x_token``.
+
+        Raises :class:`AuthFailedError` if *qr* was not produced by
+        :meth:`get_qr` (empty ``auth_state``) or if the server response
+        is missing the ``state`` field — silently treating malformed
+        responses as pending would mask upstream errors as timeouts.
         """
+        if not qr.auth_state:
+            raise AuthFailedError(
+                "check_status called with empty auth_state — was QrSession produced by get_qr()?",
+                endpoint=_STATUS_URL,
+            )
+
         headers = {"X-CSRF-Token": qr.csrf_token}
         status_resp = await self._http.post_json(
             _STATUS_URL,
             json=dict(qr.auth_state),
             headers=headers,
         )
-        if status_resp.get("state") != _STATE_CONFIRMED:
+        state = status_resp.get("state")
+        if not isinstance(state, str) or not state:
+            raise AuthFailedError(
+                "magic/code/status response missing non-empty 'state'",
+                endpoint=_STATUS_URL,
+            )
+        if state != _STATE_CONFIRMED:
             return False
 
         session_track_id = _require_str(status_resp, "trackId", _STATUS_URL)

@@ -314,6 +314,31 @@ class TestCheckStatus:
             with pytest.raises(AuthFailedError, match="trackId"):
                 await flow.check_status(qr)
 
+    async def test_empty_auth_state_raises(self, flow: QrLoginFlow) -> None:
+        """A QrSession constructed without auth_state cannot poll — fail fast."""
+        qr = QrSession(
+            track_id=_TEST_TRACK_ID,
+            csrf_token=_TEST_PAGE_CSRF_INPUT,
+            qr_url=_TEST_QR_LINK,
+        )
+        with pytest.raises(AuthFailedError, match="empty auth_state"):
+            await flow.check_status(qr)
+
+    async def test_missing_state_raises(self, flow: QrLoginFlow) -> None:
+        """Malformed status response must not be silently treated as pending."""
+        qr = self._make_qr()
+        with aioresponses() as m:
+            m.post(_STATUS_URL, status=200, payload={}, headers=_JSON_CT)
+            with pytest.raises(AuthFailedError, match="state"):
+                await flow.check_status(qr)
+
+    async def test_empty_state_raises(self, flow: QrLoginFlow) -> None:
+        qr = self._make_qr()
+        with aioresponses() as m:
+            m.post(_STATUS_URL, status=200, payload={"state": ""}, headers=_JSON_CT)
+            with pytest.raises(AuthFailedError, match="state"):
+                await flow.check_status(qr)
+
 
 # ------------------------------------------------------------------ #
 # QrSession redaction
