@@ -50,25 +50,24 @@ class TestNoTokenLeakInLogs:
                 response_url=URL(_PASSPORT),
             )
             with aioresponses() as m:
-                # QR start
+                # QR start — new BFF flow: /pwl-yandex page → password/submit → magic/code.
                 m.get(
-                    f"{_PASSPORT}/am?app_platform=android",
+                    f"{_PASSPORT}/pwl-yandex",
                     status=200,
                     body=html,
                     headers=_HTML_CT,
                 )
                 m.post(
-                    f"{_PASSPORT}/pwl-yandex/api/passport/auth/multistep_start",
+                    f"{_PASSPORT}/pwl-yandex/api/passport/auth/password/submit",
                     status=200,
-                    payload={"track_id": "track-123"},
+                    payload={"track_id": "track-123", "status": "ok"},
                     headers=_JSON_CT,
                 )
                 m.post(
-                    f"{_PASSPORT}/pwl-yandex/api/passport/auth/password/submit",
+                    f"{_PASSPORT}/pwl-yandex/api/passport/auth/magic/code",
                     status=200,
                     payload={
-                        "track_id": "track-123",
-                        "csrf_token": "csrf-tok",
+                        "link": f"{_PASSPORT}/auth/magic/code/?track_id=track-123",
                     },
                     headers=_JSON_CT,
                 )
@@ -99,6 +98,7 @@ class TestNoTokenLeakInLogs:
                     track_id=qr.track_id,
                     csrf_token=qr.csrf_token,
                     qr_url=qr.qr_url,
+                    auth_state=qr.auth_state,
                 )
                 await client.complete_qr_login(qr_with_cookies)
 
