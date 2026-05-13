@@ -20,7 +20,7 @@ that enforces the library's network invariants on every request:
 
 from __future__ import annotations
 
-import json
+import json as _json
 from typing import TYPE_CHECKING, Final
 
 import aiohttp
@@ -80,17 +80,24 @@ class SafeHttpClient:
         headers: dict[str, str] | None = None,
     ) -> dict[str, object]:
         """GET a JSON endpoint and return the parsed body."""
-        return await self._request_json("GET", url, headers=headers, data=None)
+        return await self._request_json("GET", url, headers=headers, data=None, json=None)
 
     async def post_json(
         self,
         url: str,
         *,
         data: dict[str, object] | None = None,
+        json: dict[str, object] | None = None,
         headers: dict[str, str] | None = None,
     ) -> dict[str, object]:
-        """POST form data and return the parsed JSON body."""
-        return await self._request_json("POST", url, headers=headers, data=data)
+        """POST and return the parsed JSON body.
+
+        Exactly one of *data* (form-urlencoded) or *json* (JSON body) may
+        be provided. Both may be ``None`` for an empty POST body.
+        """
+        if data is not None and json is not None:
+            raise ValueError("post_json: pass only one of data= or json=")
+        return await self._request_json("POST", url, headers=headers, data=data, json=json)
 
     async def get_json_with_headers(
         self,
@@ -99,7 +106,7 @@ class SafeHttpClient:
         headers: dict[str, str] | None = None,
     ) -> tuple[dict[str, object], dict[str, str]]:
         """GET a JSON endpoint and return ``(parsed_body, response_headers)``."""
-        response = await self._execute("GET", url, headers=headers, data=None)
+        response = await self._execute("GET", url, headers=headers, data=None, json=None)
         try:
             content_type = _content_type(response)
             if content_type not in _JSON_CONTENT_TYPES:
@@ -114,8 +121,8 @@ class SafeHttpClient:
             response.release()
 
         try:
-            parsed = json.loads(body)
-        except json.JSONDecodeError as exc:
+            parsed = _json.loads(body)
+        except _json.JSONDecodeError as exc:
             raise NetworkError(
                 f"invalid JSON body: {exc}",
                 status_code=response.status,
@@ -136,7 +143,7 @@ class SafeHttpClient:
         headers: dict[str, str] | None = None,
     ) -> str:
         """GET an HTML/text endpoint and return the body as a string."""
-        response = await self._execute("GET", url, headers=headers, data=None)
+        response = await self._execute("GET", url, headers=headers, data=None, json=None)
         status = response.status
         try:
             body = await self._read_capped(response, HTML_MAX_BYTES, url)
@@ -263,8 +270,9 @@ class SafeHttpClient:
         *,
         headers: dict[str, str] | None,
         data: dict[str, object] | None,
+        json: dict[str, object] | None,
     ) -> dict[str, object]:
-        response = await self._execute(method, url, headers=headers, data=data)
+        response = await self._execute(method, url, headers=headers, data=data, json=json)
         try:
             content_type = _content_type(response)
             if content_type not in _JSON_CONTENT_TYPES:
@@ -278,8 +286,8 @@ class SafeHttpClient:
             response.release()
 
         try:
-            parsed = json.loads(body)
-        except json.JSONDecodeError as exc:
+            parsed = _json.loads(body)
+        except _json.JSONDecodeError as exc:
             raise NetworkError(
                 f"invalid JSON body: {exc}",
                 status_code=response.status,
@@ -300,6 +308,7 @@ class SafeHttpClient:
         *,
         headers: dict[str, str] | None,
         data: dict[str, object] | None,
+        json: dict[str, object] | None,
     ) -> aiohttp.ClientResponse:
         self._check_host(url)
         await self._limiter.acquire()
@@ -319,6 +328,7 @@ class SafeHttpClient:
                 url,
                 headers=merged_headers,
                 data=data,
+                json=json,
                 timeout=timeout,
                 allow_redirects=False,
             )
