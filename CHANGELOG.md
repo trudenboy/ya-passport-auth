@@ -34,6 +34,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`refresh_music_token`, `refresh_passport_cookies`,
   `get_quasar_csrf_token`, `fetch_account_info`).
 
+## [1.4.0] - 2026-05-13
+
+### Changed
+
+- **QR login fully migrated to the `/pwl-yandex` BFF.** Replaces the
+  hybrid legacy + BFF QR flow with the modern endpoints Yandex Passport
+  ships in 2026 (`/pwl-yandex/api/passport/auth/password/submit`,
+  `/auth/magic/code`, `/auth/magic/code/status`,
+  `/sessions/get_session`). Drops the legacy
+  `POST /auth/new/magic/status/` polling endpoint and the deprecated
+  registration-validations dependency.
+- `QrSession` gains an optional `auth_state` field (default `()`) to
+  carry the opaque server state across polling calls. Existing
+  constructors keep working; `csrf_token` semantics shift from
+  per-track to page-level (still opaque to consumers).
+- `SafeHttpClient.post_json` gains an optional `json=` kwarg (mutually
+  exclusive with `data=`), mirroring aiohttp's semantics.
+
+### Security
+
+- QR `link` returned by `magic/code` is validated against
+  `ClientConfig.allowed_hosts` (HTTPS + allow-listed host) before
+  being shown to the user — defends against a malicious response
+  substituting a phishing URL (T4).
+- `QrSession.__repr__` redacts the new `auth_state` field in addition
+  to `csrf_token`.
+
 ## [1.3.0] - 2026-04-19
 
 ### Added
