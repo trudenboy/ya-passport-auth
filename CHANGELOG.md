@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-05-26
+
+### Fixed
+
+- **QR login restored.** Passport now returns an empty body `{}` from
+  `/pwl-yandex/api/passport/auth/magic/code/status` while the QR is
+  unscanned, instead of `{"state": "auth_wait_user_action"}`. The
+  previous "missing/empty `state`" branch raised `AuthFailedError` on
+  the very first poll, making QR login impossible against the live
+  service. Any non-confirmation `state` (including absent/empty) is
+  now treated as pending; only `otp_auth_finished` advances to the
+  token-exchange step.
+
+### Changed
+
+- `InvalidCredentialsError` raised from `cookie_login.login` and
+  `_token_exchange.exchange_cookies_for_x_token` now surfaces the
+  server-provided `errors[]` / `error` markers (e.g.
+  `sessionid.invalid`, `invalid_grant`), making "wrong cookie"
+  diagnostics dramatically easier. New shared helper
+  `format_token_error()` in `flows/_token_exchange.py`.
+
+### Verified
+
+- End-to-end against a real Yandex account: QR + Cookie login + Device
+  Code + `refresh_credentials` + full post-auth chain
+  (`refresh_music_token`, `refresh_passport_cookies`,
+  `get_quasar_csrf_token`, `fetch_account_info`).
+
 ## [1.3.0] - 2026-04-19
 
 ### Added
