@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   diagnostics dramatically easier. New shared helper
   `format_token_error()` in `flows/_token_exchange.py`.
 
+### Security
+
+- Bumped transitive `idna` from 3.11 → 3.16 to clear CVE-2026-45409
+  (moderate). Reaches us via `yarl` (runtime) and `requests` (dev).
+
 ### Verified
 
 - End-to-end against a real Yandex account: QR + Cookie login + Device
