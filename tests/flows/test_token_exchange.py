@@ -95,7 +95,26 @@ class TestExchangeCookiesForXToken:
                 payload={"error": "invalid_grant"},
                 headers=_JSON_CT,
             )
-            with pytest.raises(InvalidCredentialsError, match="x_token"):
+            with pytest.raises(InvalidCredentialsError, match="invalid_grant"):
+                await exchange_cookies_for_x_token(http, session)
+
+    async def test_errors_array_surfaced(
+        self,
+        http: SafeHttpClient,
+        session: aiohttp.ClientSession,
+    ) -> None:
+        session.cookie_jar.update_cookies(
+            {"Session_id": "stale-session"},
+            response_url=URL(PASSPORT_URL),
+        )
+        with aioresponses() as m:
+            m.post(
+                _TOKEN_URL,
+                status=200,
+                payload={"status": "error", "errors": ["sessionid.invalid"]},
+                headers=_JSON_CT,
+            )
+            with pytest.raises(InvalidCredentialsError, match=r"sessionid\.invalid"):
                 await exchange_cookies_for_x_token(http, session)
 
     async def test_cookie_crlf_stripped(

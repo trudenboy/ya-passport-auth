@@ -16,6 +16,7 @@ from ya_passport_auth.constants import (
 )
 from ya_passport_auth.credentials import SecretStr
 from ya_passport_auth.exceptions import InvalidCredentialsError
+from ya_passport_auth.flows._token_exchange import format_token_error
 from ya_passport_auth.logging import get_logger
 
 if TYPE_CHECKING:
@@ -65,7 +66,7 @@ class CookieLoginFlow:
 
         if "access_token" not in data:
             raise InvalidCredentialsError(
-                "failed to exchange cookies for x_token",
+                format_token_error("failed to exchange cookies for x_token", data),
                 endpoint=PASSPORT_TOKEN_BY_SESSIONID_URL,
             )
         _log.info("cookies exchanged for x_token")

@@ -28,9 +28,33 @@ if TYPE_CHECKING:
 
     from ya_passport_auth.http import SafeHttpClient
 
-__all__ = ["exchange_cookies_for_x_token", "exchange_x_token_for_music_token"]
+__all__ = [
+    "exchange_cookies_for_x_token",
+    "exchange_x_token_for_music_token",
+    "format_token_error",
+]
 
 _log = get_logger("token_exchange")
+
+
+def format_token_error(prefix: str, data: dict[str, object]) -> str:
+    """Append server-provided error markers to *prefix*, when present.
+
+    ``token_by_sessionid`` signals failure via
+    ``{"status": "error", "errors": ["sessionid.invalid"]}``; surfacing
+    that marker makes "wrong cookie" diagnostics dramatically easier.
+    Also handles the simpler ``{"error": "invalid_grant"}`` shape used
+    elsewhere by the OAuth endpoints.
+    """
+    errors = data.get("errors")
+    if isinstance(errors, list) and errors:
+        markers = ", ".join(str(e) for e in errors if isinstance(e, (str, int)))
+        if markers:
+            return f"{prefix}: {markers}"
+    err = data.get("error")
+    if isinstance(err, str) and err:
+        return f"{prefix}: {err}"
+    return prefix
 
 
 def _extract_cookie_header(session: aiohttp.ClientSession) -> str:
@@ -77,7 +101,7 @@ async def exchange_cookies_for_x_token(
 
     if "access_token" not in data:
         raise InvalidCredentialsError(
-            "failed to exchange session for x_token",
+            format_token_error("failed to exchange session for x_token", data),
             endpoint=PASSPORT_TOKEN_BY_SESSIONID_URL,
         )
     _log.info("Session cookies exchanged for x_token")
