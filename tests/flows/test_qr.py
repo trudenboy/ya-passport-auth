@@ -324,20 +324,19 @@ class TestCheckStatus:
         with pytest.raises(AuthFailedError, match="empty auth_state"):
             await flow.check_status(qr)
 
-    async def test_missing_state_raises(self, flow: QrLoginFlow) -> None:
-        """Malformed status response must not be silently treated as pending."""
+    async def test_empty_body_treated_as_pending(self, flow: QrLoginFlow) -> None:
+        # Passport returns `{}` while the QR is unscanned — the normal
+        # pending signal, not a malformed response.
         qr = self._make_qr()
         with aioresponses() as m:
             m.post(_STATUS_URL, status=200, payload={}, headers=_JSON_CT)
-            with pytest.raises(AuthFailedError, match="state"):
-                await flow.check_status(qr)
+            assert await flow.check_status(qr) is False
 
-    async def test_empty_state_raises(self, flow: QrLoginFlow) -> None:
+    async def test_empty_state_treated_as_pending(self, flow: QrLoginFlow) -> None:
         qr = self._make_qr()
         with aioresponses() as m:
             m.post(_STATUS_URL, status=200, payload={"state": ""}, headers=_JSON_CT)
-            with pytest.raises(AuthFailedError, match="state"):
-                await flow.check_status(qr)
+            assert await flow.check_status(qr) is False
 
 
 # ------------------------------------------------------------------ #

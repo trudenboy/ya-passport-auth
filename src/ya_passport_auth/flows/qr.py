@@ -10,7 +10,11 @@ This module implements the mobile Passport QR flow against the
 3. ``POST /pwl-yandex/api/passport/auth/magic/code`` (form-data with
    ``magic_track_id``) → server-provided ``link`` (the QR URL).
 4. *Polling*: ``POST /pwl-yandex/api/passport/auth/magic/code/status``
-   (JSON body = the ``auth_state``) until ``state == "otp_auth_finished"``.
+   (JSON body = the ``auth_state``). Passport returns an empty object
+   ``{}`` while the QR is unscanned and
+   ``{"state": "otp_auth_finished", "trackId": "..."}`` once the user
+   confirms on phone. Any other non-confirmed state is treated as
+   pending as well.
 5. ``POST /pwl-yandex/api/passport/sessions/get_session`` (form-data
    ``track_id``) → cookies land in the session jar.
 
@@ -206,13 +210,12 @@ class QrLoginFlow:
             json=dict(qr.auth_state),
             headers=headers,
         )
+        # Passport now returns `{}` while the QR is unscanned; the previous
+        # "must contain state" rule aborted the very first poll and made
+        # QR login impossible. Treat absent/empty/non-confirmation state
+        # as pending; only the confirmation marker advances.
         state = status_resp.get("state")
-        if not isinstance(state, str) or not state:
-            raise AuthFailedError(
-                "magic/code/status response missing non-empty 'state'",
-                endpoint=_STATUS_URL,
-            )
-        if state != _STATE_CONFIRMED:
+        if not isinstance(state, str) or state != _STATE_CONFIRMED:
             return False
 
         session_track_id = _require_str(status_resp, "trackId", _STATUS_URL)

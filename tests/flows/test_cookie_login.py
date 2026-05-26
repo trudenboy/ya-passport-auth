@@ -74,8 +74,22 @@ class TestCookieLogin:
                 payload={"error": "invalid_grant"},
                 headers=_JSON_CT,
             )
-            with pytest.raises(InvalidCredentialsError, match="x_token"):
+            with pytest.raises(InvalidCredentialsError, match="invalid_grant"):
                 await flow.login("Session_id=expired")
+
+    async def test_login_surfaces_errors_array(self, flow: CookieLoginFlow) -> None:
+        # token_by_sessionid signals failure via
+        # {"status":"error", "errors":["sessionid.invalid"]} — the
+        # marker must reach callers for diagnostics.
+        with aioresponses() as m:
+            m.post(
+                _TOKEN_URL,
+                status=200,
+                payload={"status": "error", "errors": ["sessionid.invalid"]},
+                headers=_JSON_CT,
+            )
+            with pytest.raises(InvalidCredentialsError, match=r"sessionid\.invalid"):
+                await flow.login("Session_id=stale; sessionid2=stale")
 
     async def test_login_sends_correct_headers(self, flow: CookieLoginFlow) -> None:
         cookies = "Session_id=abc; sessionid2=def"
