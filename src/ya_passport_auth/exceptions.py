@@ -32,6 +32,7 @@ __all__ = [
     "CsrfExtractionError",
     "DeviceCodeTimeoutError",
     "InvalidCredentialsError",
+    "LoginTimeoutError",
     "NetworkError",
     "QRPendingError",
     "QRTimeoutError",
@@ -113,9 +114,18 @@ class QRPendingError(AuthFailedError):
     """QR code has not been confirmed yet — keep polling."""
 
 
-class QRTimeoutError(AuthFailedError):
+class LoginTimeoutError(AuthFailedError):
+    """A polling-based login flow expired without completing.
+
+    Common supertype for :class:`QRTimeoutError` and
+    :class:`DeviceCodeTimeoutError`, so callers that don't care which
+    flow timed out can ``except LoginTimeoutError`` once.
+    """
+
+
+class QRTimeoutError(LoginTimeoutError):
     """QR polling loop expired without confirmation."""
 
 
-class DeviceCodeTimeoutError(AuthFailedError):
+class DeviceCodeTimeoutError(LoginTimeoutError):
     """Device-code polling expired (server ``expired_token`` or local deadline)."""

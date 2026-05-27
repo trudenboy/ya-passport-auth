@@ -30,6 +30,12 @@ from ya_passport_auth.exceptions import (
     DeviceCodeTimeoutError,
     InvalidCredentialsError,
 )
+from ya_passport_auth.flows._payload import (
+    require_int as _require_int,
+)
+from ya_passport_auth.flows._payload import (
+    require_str as _require_str,
+)
 from ya_passport_auth.logging import get_logger
 from ya_passport_auth.models import DeviceCodeSession, OAuthTokens
 
@@ -62,26 +68,6 @@ _DEVICE_ID_LENGTH: Final = 10
 def _generate_device_id() -> str:
     """Return a random 10-character alphanumeric device identifier."""
     return "".join(secrets.choice(_DEVICE_ID_ALPHABET) for _ in range(_DEVICE_ID_LENGTH))
-
-
-def _require_str(data: dict[str, object], key: str, endpoint: str) -> str:
-    raw = data.get(key)
-    if not isinstance(raw, str) or not raw:
-        raise AuthFailedError(
-            f"device/code response missing {key!r}",
-            endpoint=endpoint,
-        )
-    return raw
-
-
-def _require_int(data: dict[str, object], key: str, endpoint: str) -> int:
-    raw = data.get(key)
-    if isinstance(raw, bool) or not isinstance(raw, int):
-        raise AuthFailedError(
-            f"device/code response missing or non-integer {key!r}",
-            endpoint=endpoint,
-        )
-    return raw
 
 
 class DeviceCodeFlow:

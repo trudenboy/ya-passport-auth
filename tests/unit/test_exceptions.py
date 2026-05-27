@@ -19,7 +19,9 @@ from ya_passport_auth.credentials import Credentials, SecretStr
 from ya_passport_auth.exceptions import (
     AuthFailedError,
     CsrfExtractionError,
+    DeviceCodeTimeoutError,
     InvalidCredentialsError,
+    LoginTimeoutError,
     NetworkError,
     QRPendingError,
     QRTimeoutError,
@@ -39,7 +41,9 @@ from ya_passport_auth.exceptions import (
         CsrfExtractionError,
         RateLimitedError,
         QRPendingError,
+        LoginTimeoutError,
         QRTimeoutError,
+        DeviceCodeTimeoutError,
     ],
 )
 def exc_cls(request: pytest.FixtureRequest) -> type[YaPassportError]:
@@ -59,9 +63,18 @@ class TestHierarchy:
             CsrfExtractionError,
             RateLimitedError,
             QRPendingError,
+            LoginTimeoutError,
             QRTimeoutError,
+            DeviceCodeTimeoutError,
         ):
             assert issubclass(sub, AuthFailedError), sub
+
+    def test_timeout_supertype(self) -> None:
+        # QRTimeoutError and DeviceCodeTimeoutError must share a
+        # LoginTimeoutError super so callers can catch both with one
+        # ``except LoginTimeoutError``.
+        assert issubclass(QRTimeoutError, LoginTimeoutError)
+        assert issubclass(DeviceCodeTimeoutError, LoginTimeoutError)
 
     def test_auth_and_network_are_disjoint(self) -> None:
         assert not issubclass(NetworkError, AuthFailedError)

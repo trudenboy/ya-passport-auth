@@ -41,6 +41,7 @@ from ya_passport_auth.exceptions import (
     AuthFailedError,
     CsrfExtractionError,
 )
+from ya_passport_auth.flows._payload import require_str as _require_str
 from ya_passport_auth.logging import get_logger
 
 if TYPE_CHECKING:
@@ -102,17 +103,6 @@ def _extract_csrf(html: str) -> str:
         "CSRF token not found in Passport HTML",
         endpoint=_AM_URL,
     )
-
-
-def _require_str(payload: dict[str, object], key: str, endpoint: str) -> str:
-    """Pull *key* from *payload* and require it to be a non-empty string."""
-    value = payload.get(key)
-    if not isinstance(value, str) or not value.strip():
-        raise AuthFailedError(
-            f"response missing {key!r}",
-            endpoint=endpoint,
-        )
-    return value.strip()
 
 
 class QrLoginFlow:

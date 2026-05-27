@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from ya_passport_auth.http import SafeHttpClient
 
 __all__ = [
+    "exchange_cookie_string_for_x_token",
     "exchange_cookies_for_x_token",
     "exchange_x_token_for_music_token",
     "format_token_error",
@@ -76,6 +77,39 @@ def _extract_cookie_header(session: aiohttp.ClientSession) -> str:
     return "; ".join(f"{k}={_sanitize(v.value)}" for k, v in filtered.items())
 
 
+async def _post_token_by_sessionid(
+    http: SafeHttpClient,
+    cookie_header: str,
+    *,
+    error_prefix: str,
+) -> SecretStr:
+    """POST to ``token_by_sessionid`` with the given ``Ya-Client-Cookie`` value.
+
+    Shared between :func:`exchange_cookies_for_x_token` (cookies from
+    the session jar) and :func:`exchange_cookie_string_for_x_token`
+    (cookies supplied by the caller). Both paths POST identical bodies
+    and headers; only the cookie source and the diagnostic prefix differ.
+    """
+    data = await http.post_json(
+        PASSPORT_TOKEN_BY_SESSIONID_URL,
+        data={
+            "client_id": PASSPORT_CLIENT_ID,
+            "client_secret": PASSPORT_CLIENT_SECRET,
+        },
+        headers={
+            "Ya-Client-Host": "passport.yandex.ru",
+            "Ya-Client-Cookie": cookie_header,
+        },
+    )
+
+    if "access_token" not in data:
+        raise InvalidCredentialsError(
+            format_token_error(error_prefix, data),
+            endpoint=PASSPORT_TOKEN_BY_SESSIONID_URL,
+        )
+    return SecretStr(str(data["access_token"]))
+
+
 async def exchange_cookies_for_x_token(
     http: SafeHttpClient,
     session: aiohttp.ClientSession,
@@ -85,27 +119,43 @@ async def exchange_cookies_for_x_token(
     The cookies must already be present in the session's cookie jar
     (placed there by a successful QR confirmation or session refresh).
     """
-    cookies = _extract_cookie_header(session)
-
-    data = await http.post_json(
-        PASSPORT_TOKEN_BY_SESSIONID_URL,
-        data={
-            "client_id": PASSPORT_CLIENT_ID,
-            "client_secret": PASSPORT_CLIENT_SECRET,
-        },
-        headers={
-            "Ya-Client-Host": "passport.yandex.ru",
-            "Ya-Client-Cookie": cookies,
-        },
+    cookie_header = _extract_cookie_header(session)
+    token = await _post_token_by_sessionid(
+        http,
+        cookie_header,
+        error_prefix="failed to exchange session for x_token",
     )
+    _log.info("Session cookies exchanged for x_token")
+    return token
 
-    if "access_token" not in data:
+
+async def exchange_cookie_string_for_x_token(
+    http: SafeHttpClient,
+    cookies: str,
+) -> SecretStr:
+    """Exchange a caller-supplied cookie string for an ``x_token``.
+
+    *cookies* is a semicolon-separated ``key=value`` string
+    (e.g. ``"Session_id=abc; sessionid2=def"``). CR/LF characters are
+    stripped to defeat header injection (T12).
+
+    Raises :class:`InvalidCredentialsError` for empty input or a server
+    rejection.
+    """
+    if not cookies or not cookies.strip():
         raise InvalidCredentialsError(
-            format_token_error("failed to exchange session for x_token", data),
+            "cookie string is empty",
             endpoint=PASSPORT_TOKEN_BY_SESSIONID_URL,
         )
-    _log.info("Session cookies exchanged for x_token")
-    return SecretStr(str(data["access_token"]))
+
+    sanitized = cookies.strip().replace("\r", "").replace("\n", "")
+    token = await _post_token_by_sessionid(
+        http,
+        sanitized,
+        error_prefix="failed to exchange cookies for x_token",
+    )
+    _log.info("cookies exchanged for x_token")
+    return token
 
 
 async def exchange_x_token_for_music_token(

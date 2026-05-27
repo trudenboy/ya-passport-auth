@@ -27,6 +27,7 @@ ENV/
 .tox/
 .nox/
 .cache/
+.playwright-mcp/
 htmlcov/
 .coverage
 .coverage.*

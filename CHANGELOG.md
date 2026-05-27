@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `LoginTimeoutError(AuthFailedError)` — common supertype for
+  `QRTimeoutError` and `DeviceCodeTimeoutError`, so callers that don't
+  care which polling flow timed out can `except LoginTimeoutError` once.
+  Both subclasses now inherit from it (backwards compatible: existing
+  `except QRTimeoutError` / `except DeviceCodeTimeoutError` /
+  `except AuthFailedError` still work).
+- `PassportClient.poll_qr_until_confirmed` now accepts an optional
+  `should_cancel` callback, matching `poll_device_until_confirmed` —
+  when it returns truthy the poll loop aborts with
+  `InvalidCredentialsError("login cancelled")`.
+
+### Changed
+
+- Internal: unified the QR and device-code polling loops behind a
+  generic `drive_login()` driver in `flows/_polling.py`, with a
+  `PollResult` ADT (`Pending` / `SlowDown(increment_s)` /
+  `Confirmed(payload)`). No behavior change beyond the QR `should_cancel`
+  addition above.
+- Internal: `flows/cookie_login.py` removed; its single method merged
+  into `flows/_token_exchange.py` as
+  `exchange_cookie_string_for_x_token()`. `PassportClient.login_cookies`
+  is unchanged at the public surface; the removed class was internal.
+- Internal: `require_str()` / `require_int()` deduplicated from `qr.py`
+  and `device_code.py` into `flows/_payload.py`.
+
 ## [1.4.1] - 2026-05-26
 
 ### Fixed

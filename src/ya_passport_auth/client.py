@@ -8,9 +8,7 @@ manage the session lifecycle explicitly via ``__aenter__``/``close``.
 
 from __future__ import annotations
 
-import asyncio
 import inspect
-import time
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Final
 
@@ -24,12 +22,19 @@ from ya_passport_auth.exceptions import (
     QRTimeoutError,
     YaPassportError,
 )
+from ya_passport_auth.flows._polling import (
+    Confirmed,
+    Pending,
+    PollResult,
+    SlowDown,
+    drive_login,
+)
 from ya_passport_auth.flows._token_exchange import (
+    exchange_cookie_string_for_x_token,
     exchange_cookies_for_x_token,
     exchange_x_token_for_music_token,
 )
 from ya_passport_auth.flows.account import AccountInfoFetcher
-from ya_passport_auth.flows.cookie_login import CookieLoginFlow
 from ya_passport_auth.flows.device_code import DeviceCodeFlow, PollOutcome
 from ya_passport_auth.flows.glagol import GlagolDeviceTokenFetcher
 from ya_passport_auth.flows.qr import QrLoginFlow, QrSession
@@ -139,10 +144,12 @@ class PassportClient:
         *,
         poll_interval: float | None = None,
         total_timeout: float | None = None,
+        should_cancel: Callable[[], bool] | None = None,
     ) -> Credentials:
         """Poll until the QR code is confirmed, then exchange tokens.
 
-        Raises :class:`QRTimeoutError` if ``total_timeout`` expires.
+        Raises :class:`QRTimeoutError` if ``total_timeout`` expires and
+        :class:`InvalidCredentialsError` if ``should_cancel`` returns truthy.
         """
         interval = self._config.qr_poll_interval_seconds if poll_interval is None else poll_interval
         timeout = (
@@ -153,17 +160,21 @@ class PassportClient:
         if timeout <= 0:
             raise ValueError("total_timeout must be positive")
 
-        deadline = time.monotonic() + timeout
-        while True:
+        async def _poll() -> PollResult[QrSession]:
             if await self._qr.check_status(qr):
-                _log.info("QR confirmed")
-                return await self.complete_qr_login(qr)
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                break
-            await asyncio.sleep(min(interval, remaining))
+                return Confirmed(qr)
+            return Pending()
 
-        raise QRTimeoutError("QR polling timed out")
+        await drive_login(
+            poll_one=_poll,
+            interval=interval,
+            total_timeout=timeout,
+            timeout_exc=QRTimeoutError,
+            timeout_message="QR polling timed out",
+            should_cancel=should_cancel,
+        )
+        _log.info("QR confirmed")
+        return await self.complete_qr_login(qr)
 
     async def complete_qr_login(self, qr: QrSession) -> Credentials:
         """Exchange a confirmed QR session for full credentials.
@@ -182,8 +193,7 @@ class PassportClient:
 
         *cookies* should be a semicolon-separated ``key=value`` string.
         """
-        flow = CookieLoginFlow(http=self._http)
-        x_token = await flow.login(cookies)
+        x_token = await exchange_cookie_string_for_x_token(self._http, cookies)
         return await self._complete_auth_from_x_token(x_token)
 
     # ------------------------------------------------------------------ #
@@ -219,36 +229,31 @@ class PassportClient:
         if timeout <= 0:
             raise ValueError("total_timeout must be positive")
 
-        deadline = time.monotonic() + timeout
-        while True:
-            if should_cancel is not None and should_cancel():
-                raise InvalidCredentialsError("device login cancelled")
-
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise DeviceCodeTimeoutError("device polling timed out")
-
+        async def _poll() -> PollResult[OAuthTokens]:
             result = await self._device.poll_token(session.device_code)
             if isinstance(result, OAuthTokens):
-                _log.info("Device code confirmed")
-                return await self._complete_auth_from_x_token(
-                    result.access_token,
-                    refresh_token=result.refresh_token,
-                )
+                return Confirmed(result)
             if result is PollOutcome.SLOW_DOWN:
-                interval += _SLOW_DOWN_INCREMENT_S
-                _log.warning("slow_down received; increasing poll interval to %.1fs", interval)
-                remaining = deadline - time.monotonic()
-                if interval > remaining:
-                    # RFC 8628 §3.5 forbids polling faster than the bumped
-                    # interval; if the deadline is too close to honor it,
-                    # stop rather than send one final too-fast request.
-                    raise DeviceCodeTimeoutError("device polling timed out after slow_down")
+                _log.warning(
+                    "slow_down received; increasing poll interval by %.1fs",
+                    _SLOW_DOWN_INCREMENT_S,
+                )
+                return SlowDown(_SLOW_DOWN_INCREMENT_S)
+            return Pending()
 
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise DeviceCodeTimeoutError("device polling timed out")
-            await asyncio.sleep(min(interval, remaining))
+        tokens = await drive_login(
+            poll_one=_poll,
+            interval=interval,
+            total_timeout=timeout,
+            timeout_exc=DeviceCodeTimeoutError,
+            timeout_message="device polling timed out",
+            should_cancel=should_cancel,
+        )
+        _log.info("Device code confirmed")
+        return await self._complete_auth_from_x_token(
+            tokens.access_token,
+            refresh_token=tokens.refresh_token,
+        )
 
     async def login_device_code(
         self,
