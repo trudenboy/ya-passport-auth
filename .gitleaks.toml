@@ -1,0 +1,11 @@
+# Gitleaks config: default rules + an allowlist for the repository's
+# documented test-token conventions (see CLAUDE.md: fixtures use
+# `test-token-*` / `test-*-0123...` shaped values, never real secrets).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Sanitized test tokens following the repo's test-* convention"
+regexes = [
+  '''\btest-[A-Za-z0-9][A-Za-z0-9-]{2,}\b''',
+]
