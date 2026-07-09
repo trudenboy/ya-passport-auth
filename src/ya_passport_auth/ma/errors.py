@@ -23,7 +23,7 @@ from ya_passport_auth.exceptions import (
     YaPassportError,
 )
 
-__all__ = ["failure_reason", "raise_mapped"]
+__all__ = ["failure_reason", "raise_mapped", "raise_mapped_refresh"]
 
 
 def raise_mapped(err: YaPassportError, *, context: str) -> NoReturn:
@@ -48,6 +48,37 @@ def raise_mapped(err: YaPassportError, *, context: str) -> NoReturn:
     if isinstance(err, InvalidCredentialsError):
         raise LoginFailed(f"{context} was denied. Please try again.") from err
     raise LoginFailed(f"{context} failed ({type(err).__name__})") from err
+
+
+def raise_mapped_refresh(err: YaPassportError, *, context: str) -> NoReturn:
+    """Re-raise a library error from a silent token refresh/rotation.
+
+    Unlike interactive login flows, a refresh acts on *stored* credentials —
+    callers clear them on ``LoginFailed``. Only an explicit rejection
+    (``InvalidCredentialsError``, e.g. OAuth ``invalid_grant``) proves the
+    credential is dead; any other server response (including a novel OAuth
+    error code during a Yandex incident) maps to
+    ``ResourceTemporarilyUnavailable`` so a healthy token is never destroyed
+    over a hiccup.
+
+    Args:
+        err: The ``ya_passport_auth`` exception to translate.
+        context: Short human prefix for the message.
+
+    Raises:
+        LoginFailed: The credential was explicitly rejected.
+        ResourceTemporarilyUnavailable: Anything else — retry later, keep
+            credentials.
+    """
+    if isinstance(err, InvalidCredentialsError):
+        raise LoginFailed(f"{context} was rejected. Please re-authenticate.") from err
+    if isinstance(err, NetworkError | RateLimitedError):
+        raise ResourceTemporarilyUnavailable(
+            f"{context}: Yandex Passport temporarily unavailable ({type(err).__name__})"
+        ) from err
+    raise ResourceTemporarilyUnavailable(
+        f"{context}: unexpected Yandex Passport response ({type(err).__name__}) — retry later"
+    ) from err
 
 
 def failure_reason(err: Exception) -> str:

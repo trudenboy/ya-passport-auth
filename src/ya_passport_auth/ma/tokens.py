@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from ya_passport_auth import Credentials, PassportClient
 from ya_passport_auth.exceptions import NetworkError, RateLimitedError, YaPassportError
 
-from .errors import raise_mapped
+from .errors import raise_mapped_refresh
 
 if TYPE_CHECKING:
     from ya_passport_auth import SecretStr
@@ -32,15 +32,15 @@ async def refresh_music_token(x_token: SecretStr) -> SecretStr:
         A fresh music-scoped OAuth token.
 
     Raises:
-        ResourceTemporarilyUnavailable: Transient failure (network, rate
-            limit) — retry later, keep stored credentials.
-        LoginFailed: The x_token was rejected (expired/invalid).
+        ResourceTemporarilyUnavailable: Transient or unrecognized failure —
+            retry later, keep stored credentials.
+        LoginFailed: The x_token was explicitly rejected (expired/invalid).
     """
     try:
         async with PassportClient.create() as client:
             return await client.refresh_music_token(x_token)
     except YaPassportError as err:
-        raise_mapped(err, context="Music token refresh")
+        raise_mapped_refresh(err, context="Music token refresh")
 
 
 async def refresh_credentials(x_token: SecretStr, refresh_token: SecretStr) -> Credentials:
@@ -59,8 +59,10 @@ async def refresh_credentials(x_token: SecretStr, refresh_token: SecretStr) -> C
         New credentials with rotated ``x_token`` and ``refresh_token``.
 
     Raises:
-        ResourceTemporarilyUnavailable: Transient failure — retry later.
-        LoginFailed: The refresh token was rejected.
+        ResourceTemporarilyUnavailable: Transient or unrecognized failure —
+            retry later, keep stored credentials.
+        LoginFailed: The refresh token was explicitly rejected
+            (``invalid_grant``).
     """
     try:
         async with PassportClient.create() as client:
@@ -68,7 +70,7 @@ async def refresh_credentials(x_token: SecretStr, refresh_token: SecretStr) -> C
                 Credentials(x_token=x_token, refresh_token=refresh_token)
             )
     except YaPassportError as err:
-        raise_mapped(err, context="Credential refresh")
+        raise_mapped_refresh(err, context="Credential refresh")
 
 
 async def validate_x_token(x_token: SecretStr) -> bool:

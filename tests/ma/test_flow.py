@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import TYPE_CHECKING, Self
 
 import pytest
@@ -32,6 +33,14 @@ if TYPE_CHECKING:
     from .conftest import FakeMass
 
 _PAGE = DevicePageConfig(domain="yandex_test")
+
+
+async def _served_status(fake_mass: FakeMass, session_id: str = "session-1") -> object:
+    """Invoke the registered status handler and decode its JSON body."""
+    handler = fake_mass.webserver.routes[f"/yandex_test/device_code/{session_id}/status"]
+    response = await handler(None)  # type: ignore[operator]
+    assert response.text is not None
+    return json.loads(response.text)
 
 
 def _creds(*, refresh: bool = True, music: bool = True) -> Credentials:
@@ -127,9 +136,9 @@ class TestRunDeviceFlow:
 
     async def test_status_reports_done(self, fake_mass: FakeMass, fake_client: _FakeClient) -> None:
         await run_device_flow(fake_mass, "session-1", _PAGE)
-        # The state dict served by the still-alive status route says done.
-        # (Route handlers close over the same dict.)
-        assert "/yandex_test/device_code/session-1/status" in fake_mass.webserver.routes
+        # The still-alive status route serves the terminal state so the popup
+        # can observe it and close itself.
+        assert await _served_status(fake_mass) == {"state": "done"}
 
     @pytest.mark.parametrize(
         ("error", "reason", "match"),
@@ -149,6 +158,8 @@ class TestRunDeviceFlow:
         fake_client.poll_error = error
         with pytest.raises(LoginFailed, match=match):
             await run_device_flow(fake_mass, "session-1", _PAGE)
+        # The page polls the status route to learn WHY the login failed.
+        assert await _served_status(fake_mass) == {"state": "failed", "reason": reason}
 
     async def test_transient_failure_maps_to_temporarily_unavailable(
         self, fake_mass: FakeMass, fake_client: _FakeClient
@@ -163,6 +174,10 @@ class TestRunDeviceFlow:
         fake_client.poll_error = asyncio.CancelledError()
         with pytest.raises(asyncio.CancelledError):
             await run_device_flow(fake_mass, "session-1", _PAGE)
+        # Cancellation is not an auth failure — the page must not show
+        # "denied"/"error"; teardown is still scheduled (routes alive now).
+        assert await _served_status(fake_mass) == {"state": "pending"}
+        assert fake_mass.created
 
     @pytest.mark.parametrize(
         "bad_session_id",
@@ -196,6 +211,26 @@ class TestRunQrFlow:
     ) -> None:
         with pytest.raises(InvalidDataError):
             await run_qr_flow(fake_mass, "a/b")
+
+    @pytest.mark.parametrize(
+        ("error", "expected"),
+        [
+            (NetworkError("net down"), ResourceTemporarilyUnavailable),
+            (InvalidCredentialsError("no"), LoginFailed),
+        ],
+    )
+    async def test_errors_are_mapped(
+        self,
+        fake_mass: FakeMass,
+        fake_client: _FakeClient,
+        error: Exception,
+        expected: type[Exception],
+    ) -> None:
+        # Raw library exceptions may embed response fragments — they must
+        # never reach MA unmapped.
+        fake_client.poll_error = error
+        with pytest.raises(expected):
+            await run_qr_flow(fake_mass, "session-1")
 
 
 class TestRequireMusicToken:
@@ -250,3 +285,20 @@ class TestLoginWithCookies:
     async def test_no_kv_pairs(self) -> None:
         with pytest.raises(InvalidDataError, match="Invalid cookie format"):
             await login_with_cookies("just-some-garbage")
+
+    @pytest.mark.parametrize(
+        ("error", "expected"),
+        [
+            (NetworkError("net down"), ResourceTemporarilyUnavailable),
+            (InvalidCredentialsError("no"), LoginFailed),
+        ],
+    )
+    async def test_errors_are_mapped(
+        self, fake_client: _FakeClient, error: Exception, expected: type[Exception]
+    ) -> None:
+        async def _login_cookies(cookies: str) -> Credentials:
+            raise error
+
+        fake_client.login_cookies = _login_cookies  # type: ignore[attr-defined]
+        with pytest.raises(expected):
+            await login_with_cookies("Session_id=abc")

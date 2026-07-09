@@ -35,6 +35,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The core library keeps zero MA dependencies — guarded by import-purity
   tests; the MA *server* package is only imported lazily inside the flows.
 
+### Changed
+
+- `AccountInfoFetcher.validate` / `PassportClient.validate_x_token` now
+  re-raise `RateLimitedError` instead of reporting `False` — an HTTP 429
+  is a Passport outage signal, not a verdict on the token, and a `False`
+  return caused callers to clear a still-valid x_token.
+- `ma.tokens.refresh_music_token` / `ma.tokens.refresh_credentials` treat
+  only an explicit rejection (`InvalidCredentialsError`, e.g. OAuth
+  `invalid_grant`) as terminal; any other server response maps to
+  `ResourceTemporarilyUnavailable` so a Yandex-side incident can no longer
+  wipe stored credentials.
+
 ## [1.5.0] - 2026-05-27
 
 ### Added

@@ -9,6 +9,7 @@ from music_assistant_models.errors import LoginFailed, ResourceTemporarilyUnavai
 
 from ya_passport_auth import Credentials, PassportClient, SecretStr
 from ya_passport_auth.exceptions import (
+    AuthFailedError,
     InvalidCredentialsError,
     NetworkError,
     RateLimitedError,
@@ -73,6 +74,13 @@ class TestRefreshMusicToken:
         with pytest.raises(LoginFailed):
             await refresh_music_token(_X)
 
+    async def test_unknown_server_error_is_transient(self, fake_client: _FakeClient) -> None:
+        # Only an explicit rejection is terminal — a novel/unknown server
+        # error must not cascade into clearing stored credentials.
+        fake_client.error = AuthFailedError("unexpected token response")
+        with pytest.raises(ResourceTemporarilyUnavailable):
+            await refresh_music_token(_X)
+
 
 class TestRefreshCredentials:
     async def test_success(self, fake_client: _FakeClient) -> None:
@@ -85,8 +93,22 @@ class TestRefreshCredentials:
             await refresh_credentials(_X, _REFRESH)
 
     async def test_terminal(self, fake_client: _FakeClient) -> None:
-        fake_client.error = YaPassportError("rejected")
+        fake_client.error = InvalidCredentialsError("refresh_token rejected")
         with pytest.raises(LoginFailed):
+            await refresh_credentials(_X, _REFRESH)
+
+    @pytest.mark.parametrize(
+        "exc",
+        [AuthFailedError("refresh_token error: internal_error"), YaPassportError("odd")],
+    )
+    async def test_unknown_oauth_error_is_transient(
+        self, fake_client: _FakeClient, exc: Exception
+    ) -> None:
+        # A Yandex-side incident (200 + {"error": "internal_error"}) must not
+        # be mistaken for a consumed refresh token — that would wipe the
+        # stored credential triple while the token is still valid.
+        fake_client.error = exc
+        with pytest.raises(ResourceTemporarilyUnavailable):
             await refresh_credentials(_X, _REFRESH)
 
 

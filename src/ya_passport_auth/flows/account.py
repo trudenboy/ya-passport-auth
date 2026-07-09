@@ -6,7 +6,11 @@ from typing import TYPE_CHECKING
 
 from ya_passport_auth.constants import PASSPORT_API_URL
 from ya_passport_auth.credentials import SecretStr
-from ya_passport_auth.exceptions import AuthFailedError, InvalidCredentialsError
+from ya_passport_auth.exceptions import (
+    AuthFailedError,
+    InvalidCredentialsError,
+    RateLimitedError,
+)
 from ya_passport_auth.logging import get_logger
 from ya_passport_auth.models import AccountInfo
 
@@ -66,9 +70,20 @@ class AccountInfoFetcher:
         )
 
     async def validate(self, x_token: SecretStr) -> bool:
-        """Return ``True`` if the ``x_token`` is valid, ``False`` otherwise."""
+        """Return ``True`` if the ``x_token`` is valid, ``False`` otherwise.
+
+        Transient failures (network errors, HTTP 429) propagate instead of
+        reporting ``False`` — a Passport outage is not a verdict on the
+        token, and callers use ``False`` to clear stored credentials.
+
+        Raises:
+            RateLimitedError: Passport returned 429.
+            NetworkError: Transient failure reaching Passport.
+        """
         try:
             await self.fetch(x_token)
+        except RateLimitedError:
+            raise
         except (InvalidCredentialsError, AuthFailedError):
             return False
         return True

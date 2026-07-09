@@ -198,6 +198,52 @@ class TestInitialize:
         assert await _cascade(store).initialize() is False
         assert ("x_token", None) in store.sets
 
+    async def test_rotation_invokes_apply_credentials_hook(self, passport: _Passport) -> None:
+        # The hook is what delivers the rotated triple to the provider's live
+        # session — skipping it leaves the consumed refresh_token in memory.
+        passport.music_error = LoginFailed("x expired")
+        received: list[Credentials] = []
+
+        async def apply_credentials(creds: Credentials) -> None:
+            received.append(creds)
+
+        store = _Store(x_token="test-x-0123456789", refresh_token="test-refresh-0123456789")
+        hooks = CascadeHooks(apply_credentials=apply_credentials)
+        assert await _cascade(store, hooks).initialize() is True
+        assert received == [passport.rotated]
+
+    async def test_rotation_finalization_failure_returns_false_but_keeps_rotated(
+        self, passport: _Passport, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # post_refresh failing right after a successful rotation must not be
+        # reported as silent success — but the persisted rotated credentials
+        # stay (they are fresh), and the reason is logged.
+        passport.music_error = LoginFailed("x expired")
+
+        async def post_refresh() -> bool:
+            # Succeed for the music-refresh step is impossible here (music
+            # refresh raises), so this only runs on the rotation path.
+            return False
+
+        store = _Store(x_token="test-x-0123456789", refresh_token="test-refresh-0123456789")
+        hooks = CascadeHooks(post_refresh=post_refresh)
+        with caplog.at_level("WARNING"):
+            assert await _cascade(store, hooks).initialize() is False
+        assert ("x_token", "test-x-rotated-0123456789") in store.sets
+        assert ("x_token", None) not in store.sets
+        assert any("finalization" in r.message for r in caplog.records)
+
+    async def test_post_refresh_exception_treated_as_failure(self, passport: _Passport) -> None:
+        # A hook blowing up (MA API drift) must behave like post_refresh
+        # returning False, not propagate raw out of initialize().
+        async def post_refresh() -> bool:
+            msg = "provider hook exploded"
+            raise RuntimeError(msg)
+
+        store = _Store(x_token="test-x-0123456789")
+        hooks = CascadeHooks(post_refresh=post_refresh)
+        assert await _cascade(store, hooks).initialize() is False
+
 
 class TestSilentReauth:
     async def test_refreshes_music_token(self, passport: _Passport) -> None:
@@ -214,6 +260,45 @@ class TestSilentReauth:
     async def test_no_x_token(self, passport: _Passport) -> None:
         store = _Store(music_token="test-music-0123456789")
         assert await _cascade(store).silent_reauth() is False
+
+    async def test_transient_error_calls_on_failure_and_propagates(
+        self, passport: _Passport
+    ) -> None:
+        # Same contract as initialize(): transient errors propagate (so the
+        # caller keeps credentials) and on_failure cleanup still runs.
+        passport.music_error = ResourceTemporarilyUnavailable("blip")
+        cleaned: list[str] = []
+
+        async def on_failure() -> None:
+            cleaned.append("cleanup")
+
+        store = _Store(**_FULL)
+        hooks = CascadeHooks(on_failure=on_failure)
+        with pytest.raises(ResourceTemporarilyUnavailable):
+            await _cascade(store, hooks).silent_reauth()
+        assert cleaned == ["cleanup"]
+        assert ("x_token", None) not in store.sets
+
+    async def test_unexpected_error_maps_to_transient(self, passport: _Passport) -> None:
+        passport.music_error = OSError("socket")
+        store = _Store(**_FULL)
+        with pytest.raises(ResourceTemporarilyUnavailable):
+            await _cascade(store).silent_reauth()
+        assert ("x_token", None) not in store.sets
+
+    async def test_gives_up_calls_on_failure(self, passport: _Passport) -> None:
+        # No refresh_token → rotation impossible → the cascade gives up; the
+        # on_failure hook (e.g. close provider HTTP session) must still run.
+        passport.music_error = LoginFailed("x expired")
+        cleaned: list[str] = []
+
+        async def on_failure() -> None:
+            cleaned.append("cleanup")
+
+        store = _Store(x_token="test-x-0123456789", music_token="test-music-0123456789")
+        hooks = CascadeHooks(on_failure=on_failure)
+        assert await _cascade(store, hooks).silent_reauth() is False
+        assert cleaned == ["cleanup"]
 
     async def test_expired_x_token_falls_back_to_rotation(self, passport: _Passport) -> None:
         passport.music_error = LoginFailed("x expired")
@@ -236,18 +321,32 @@ class TestSilentReauth:
         assert passport.rotate_calls == 1
 
     async def test_concurrent_reauths_serialize(self, passport: _Passport) -> None:
-        # refresh_token is single-use — a 401 storm must trigger exactly one
-        # rotation; waiters act on the rotated values.
-        passport.music_error = LoginFailed("x expired")
+        # refresh_token is single-use — a 401 storm must trigger exactly ONE
+        # rotation; later waiters must observe the rotated values instead of
+        # re-rotating with the already-consumed refresh_token.
+        stale_x = "test-x-0123456789"
+
+        async def refresh_music_token(x_token: SecretStr) -> SecretStr:
+            await asyncio.sleep(0)  # real awaits suspend — the lock must cover this
+            passport.music_calls += 1
+            if x_token.get_secret() == stale_x:
+                raise LoginFailed("x expired")
+            return SecretStr("test-music-fresh-0123456789")
+
+        async def refresh_credentials(x_token: SecretStr, refresh_token: SecretStr) -> Credentials:
+            await asyncio.sleep(0)
+            passport.rotate_calls += 1
+            return passport.rotated
+
         store = _Store(**_FULL)
         cascade = _cascade(store)
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(cascade_mod, "refresh_music_token", refresh_music_token)
+            mp.setattr(cascade_mod, "refresh_credentials", refresh_credentials)
+            results = await asyncio.gather(*(cascade.silent_reauth() for _ in range(3)))
 
-        async def _one() -> bool:
-            return await cascade.silent_reauth()
-
-        results = await asyncio.gather(_one(), _one(), _one())
         assert all(results)
-        # After the first rotation the store carries the rotated x_token; the
-        # fake keeps raising for music refresh, so each waiter rotates against
-        # the *current* refresh token — but never concurrently.
-        assert passport.rotate_calls == len(results)
+        assert passport.rotate_calls == 1
+        # Waiters 2 and 3 read the rotated x_token inside the lock and
+        # refresh the music token without burning another rotation.
+        assert passport.music_calls == 3

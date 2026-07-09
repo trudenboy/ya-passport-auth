@@ -165,6 +165,12 @@ class DeviceCodeRoutes:
         try:
             base = self._mass.webserver.base_url
         except Exception:
+            # An auth-critical URL degrading to a relative path must be
+            # visible in logs — the popup may fail to open because of it.
+            _LOGGER.warning(
+                "Could not read MA base_url — device-code page URL will be relative",
+                exc_info=True,
+            )
             return ""
         return str(base).rstrip("/") if base else ""
 

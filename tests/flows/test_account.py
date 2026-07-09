@@ -10,7 +10,7 @@ from aioresponses import aioresponses
 
 from ya_passport_auth.config import ClientConfig
 from ya_passport_auth.credentials import SecretStr
-from ya_passport_auth.exceptions import AuthFailedError, InvalidCredentialsError
+from ya_passport_auth.exceptions import AuthFailedError, InvalidCredentialsError, RateLimitedError
 from ya_passport_auth.flows.account import AccountInfoFetcher
 from ya_passport_auth.http import SafeHttpClient
 from ya_passport_auth.models import AccountInfo
@@ -135,4 +135,17 @@ class TestXTokenValidator:
                 payload={"status_code": 401, "error": "unauthorized"},
                 headers=_JSON_CT,
             )
+            assert await fetcher.validate(SecretStr(_TEST_X_TOKEN)) is False
+
+    async def test_rate_limited_propagates(self, fetcher: AccountInfoFetcher) -> None:
+        # A 429 is a Passport outage signal, not a verdict on the token —
+        # reporting False here would make callers clear a good token.
+        with aioresponses() as m:
+            m.get(_SHORT_INFO_URL, status=429)
+            with pytest.raises(RateLimitedError):
+                await fetcher.validate(SecretStr(_TEST_X_TOKEN))
+
+    async def test_malformed_response_reports_invalid(self, fetcher: AccountInfoFetcher) -> None:
+        with aioresponses() as m:
+            m.get(_SHORT_INFO_URL, status=200, payload={"unexpected": True}, headers=_JSON_CT)
             assert await fetcher.validate(SecretStr(_TEST_X_TOKEN)) is False

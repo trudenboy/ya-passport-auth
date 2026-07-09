@@ -195,6 +195,10 @@ class CredentialCascade:
         Returns:
             ``True`` when credentials were rotated and the caller can retry
             its operation; ``False`` when silent refresh isn't possible.
+
+        Raises:
+            ResourceTemporarilyUnavailable: Transient Passport failure —
+                stored credentials are preserved so a later retry can succeed.
         """
         async with self._lock:
             # Read inside the lock so we pick up values rotated by a prior
@@ -207,6 +211,17 @@ class CredentialCascade:
                 new_music_token = await refresh_music_token(x_token)
             except LoginFailed:
                 return await self._try_rotation(x_token, refresh_token)
+            except ResourceTemporarilyUnavailable:
+                await self._fail()
+                raise
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:
+                self._log.warning("Silent re-auth failed unexpectedly", exc_info=True)
+                await self._fail()
+                raise ResourceTemporarilyUnavailable(
+                    "Unable to refresh music token right now. Please try again later."
+                ) from err
 
             self._set(self._keys.music_token, new_music_token.get_secret())
             if self._hooks.apply_music_token is not None:
@@ -215,14 +230,8 @@ class CredentialCascade:
             # Provider-side finalization (e.g. cookie refresh). If it fails
             # (expired x_token), fall back to refresh_token rotation —
             # otherwise the caller would retry with stale state and 401 again.
-            if self._hooks.post_refresh is None:
+            if await self._run_post_refresh("after silent re-auth"):
                 return True
-            try:
-                if await self._hooks.post_refresh():
-                    return True
-                self._log.debug("post_refresh after silent reauth returned False")
-            except Exception:
-                self._log.debug("post_refresh after silent reauth failed", exc_info=True)
             return await self._try_rotation(x_token, refresh_token)
 
     # ------------------------------------------------------------------ #
@@ -264,7 +273,7 @@ class CredentialCascade:
         except asyncio.CancelledError:
             raise
         except Exception as err:
-            self._log.warning("Session token refresh failed (network): %s", type(err).__name__)
+            self._log.warning("Session token refresh failed unexpectedly", exc_info=True)
             await self._fail()
             raise ResourceTemporarilyUnavailable(
                 "Unable to refresh music token right now. Please try again later."
@@ -273,7 +282,7 @@ class CredentialCascade:
         self._set(self._keys.music_token, new_music_token.get_secret())
         if self._hooks.apply_music_token is not None:
             await self._hooks.apply_music_token(new_music_token)
-        if self._hooks.post_refresh is None or await self._hooks.post_refresh():
+        if await self._run_post_refresh("after music token refresh"):
             self._log.info("Refreshed music token from session token")
             return True
         await self._fail()
@@ -285,7 +294,8 @@ class CredentialCascade:
         if refresh_token is not None:
             try:
                 await self._rotate_via_refresh_token(x_token, refresh_token)
-            except LoginFailed:
+            except LoginFailed as err:
+                self._log.warning("Silent rotation failed: %s", err)
                 await self._fail()
                 return False
             except ResourceTemporarilyUnavailable:
@@ -318,6 +328,7 @@ class CredentialCascade:
         new_music_token = new_creds.music_token
         new_refresh_token = new_creds.refresh_token
         if new_music_token is None or new_refresh_token is None:
+            self._log.warning("Credential rotation returned an incomplete response — clearing")
             self._clear_all()
             raise LoginFailed("Credential refresh returned an incomplete response.")
 
@@ -326,22 +337,50 @@ class CredentialCascade:
         self._set(self._keys.refresh_token, new_refresh_token.get_secret())
         if self._hooks.apply_credentials is not None:
             await self._hooks.apply_credentials(new_creds)
-        if self._hooks.post_refresh is not None and not await self._hooks.post_refresh():
+        if not await self._run_post_refresh("after credential rotation"):
             # Stored creds are fresh, but the provider-side finalization
             # failed (e.g. cookie refresh) — surface it instead of silently
-            # reporting success while the next request would 401.
+            # reporting success while the next request would 401. The
+            # rotated credentials stay persisted; a later retry can use them.
             raise LoginFailed("Credential refresh succeeded but session finalization failed.")
         self._log.info("Re-issued credentials silently from refresh token")
 
     async def _try_rotation(self, x_token: SecretStr, refresh_token: SecretStr | None) -> bool:
         if refresh_token is None:
+            self._log.warning("Silent re-auth failed and no refresh token is stored")
+            await self._fail()
             return False
         try:
             await self._rotate_via_refresh_token(x_token, refresh_token)
-        except LoginFailed:
+        except LoginFailed as err:
+            self._log.warning("Silent rotation failed: %s", err)
+            await self._fail()
             return False
+        except ResourceTemporarilyUnavailable:
+            # Transient — don't wipe creds, let the caller retry later.
+            await self._fail()
+            raise
         else:
             return True
+
+    async def _run_post_refresh(self, stage: str) -> bool:
+        """Run the provider's ``post_refresh`` hook; a hook crash counts as failure.
+
+        Hook exceptions (MA API drift, provider bugs) are logged at WARNING
+        and mapped to ``False`` so every caller handles them exactly like a
+        hook that reported failure — never silently and never by escaping raw.
+        """
+        if self._hooks.post_refresh is None:
+            return True
+        try:
+            if await self._hooks.post_refresh():
+                return True
+            self._log.warning("post_refresh hook %s reported failure", stage)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self._log.warning("post_refresh hook %s raised", stage, exc_info=True)
+        return False
 
     def _clear_all(self) -> None:
         self._set(self._keys.music_token, None)
