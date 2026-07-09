@@ -38,6 +38,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Music Assistant integration layer (ya_passport_auth.ma): shared device-code
+# page, login flows, credential cascade and config-entry builders for the MA
+# yandex providers. The music_assistant *server* package is expected at
+# runtime inside MA and is imported lazily; only the models package is a
+# declared dependency.
+ma = [
+    "music-assistant-models>=1.1.158",
+]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
@@ -51,6 +59,7 @@ dev = [
     "cyclonedx-bom>=4",
     "liccheck>=0.9",
     "pre-commit>=3.8",
+    "music-assistant-models>=1.1.158",
 ]
 
 [project.urls]
@@ -101,6 +110,12 @@ enable_error_code = [
 
 [[tool.mypy.overrides]]
 module = ["aioresponses", "aioresponses.*"]
+ignore_missing_imports = true
+
+# The MA *server* package is a runtime-only host environment for the ma
+# layer — never installed in this repo's CI. Models are typed and installed.
+[[tool.mypy.overrides]]
+module = ["music_assistant.*"]
 ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------

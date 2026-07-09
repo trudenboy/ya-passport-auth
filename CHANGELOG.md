@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`ya_passport_auth.ma` — Music Assistant integration layer** (install
+  via the new `ma` extra: `pip install ya-passport-auth[ma]`). Extracts the
+  MA-side auth plumbing the five yandex providers each carried themselves:
+  - `ma.page` / `ma.strings` — the localized (EN/RU + MA translations
+    catalog) device-code login page: tap-to-copy code with `execCommand`
+    fallback, honest per-request countdown, dark theme, terminal states
+    with failure reasons, optional provider context paragraph.
+  - `ma.routes` — webserver route lifecycle: idempotent registration,
+    takeover on rapid retry, deferred non-blocking teardown with a
+    30-second terminal-state grace window.
+  - `ma.flow` — blocking `run_device_flow` / `run_qr_flow` /
+    `login_with_cookies` behind MA config actions, with session-id
+    validation on every flow.
+  - `ma.tokens` / `ma.errors` — token maintenance with unified error
+    mapping (transient → `ResourceTemporarilyUnavailable`, terminal →
+    `LoginFailed`; messages carry class names only, never library detail).
+  - `ma.cascade` — the silent credential-refresh cascade
+    (fast-path → x_token refresh → refresh-token rotation → clear),
+    parameterized by provider config keys and hooks; all rotation is
+    serialized (single-use refresh tokens are storm-safe).
+  - `ma.config` — the standard auth config-entry block and ACTION
+    dispatch with canonical `auth_device`/`auth_qr`/`auth_cookies`/
+    `clear_auth` action keys.
+  The core library keeps zero MA dependencies — guarded by import-purity
+  tests; the MA *server* package is only imported lazily inside the flows.
+
 ## [1.5.0] - 2026-05-27
 
 ### Added

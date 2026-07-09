@@ -30,6 +30,14 @@
 pip install ya-passport-auth
 ```
 
+With the Music Assistant integration layer (shared device-code login page,
+config-entry builders and the silent credential-refresh cascade used by the
+MA yandex providers):
+
+```
+pip install ya-passport-auth[ma]
+```
+
 ## Quick start
 
 ### QR login
