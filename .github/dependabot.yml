@@ -28,6 +28,12 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+    groups:
+      # codeql-action sub-actions (init/analyze/upload-sarif) must move in
+      # lockstep: mixing versions fails the run with a config-version error.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
     # Dependabot will open PRs with commit SHAs pinned for every action
     # when the repo uses tag references. This is the supply-chain hardening
     # path in place of manual SHA pinning.
