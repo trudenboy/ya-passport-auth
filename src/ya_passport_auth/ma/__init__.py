@@ -21,6 +21,11 @@ Requires the ``ma`` extra (``pip install ya-passport-auth[ma]``). The MA
 
 from __future__ import annotations
 
+from .borrow import (
+    BORROW_SOURCE_OWN,
+    BorrowedCredentialSource,
+    list_yandex_music_instances,
+)
 from .cascade import CascadeHooks, CredentialCascade, KeySpec
 from .config import (
     ACTION_AUTH_COOKIES,
@@ -50,9 +55,11 @@ __all__ = [
     "ACTION_AUTH_DEVICE",
     "ACTION_AUTH_QR",
     "ACTION_CLEAR_AUTH",
+    "BORROW_SOURCE_OWN",
     "DEFAULT_PAGE_STRINGS",
     "POST_AUTH_GRACE_SECONDS",
     "AuthConfigSpec",
+    "BorrowedCredentialSource",
     "CascadeHooks",
     "CredentialCascade",
     "DeviceCodeRoutes",
@@ -64,6 +71,7 @@ __all__ = [
     "failure_reason",
     "handle_auth_action",
     "is_authenticated",
+    "list_yandex_music_instances",
     "login_with_cookies",
     "raise_mapped",
     "refresh_credentials",

@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`ya_passport_auth.ma.borrow` — shared-account credentials** (extracted
+  from the yandex_ynison plugin's borrow mode, spec 0004).
+  `BorrowedCredentialSource` gives any MA yandex provider read-only access
+  to a linked `yandex_music` instance's tokens: the owner stays the single
+  writer/rotator of persisted credentials (single-use refresh tokens are
+  never burned by a second party); borrowers mint music tokens in memory
+  from the owner's x_token with a TTL cache (50 min, LRU-bounded,
+  SHA-256-hashed keys) and lock-coalesced refreshes so 401 storms cost one
+  Passport call. Plus `list_yandex_music_instances` and the
+  `BORROW_SOURCE_OWN` sentinel for account-source dropdowns.
+  `invalidate(token)` accepts whichever token got the 401 — x_token,
+  minted or the owner's *persisted* music token; a rejected persisted
+  token is skipped (borrower falls back to minting from x_token) until
+  the owner rotates it. `read_tokens()` returns `SecretStr` values; an
+  owner instance that is not loaded raises
+  `ResourceTemporarilyUnavailable` (startup ordering) rather than a
+  terminal `LoginFailed`.
+
 ## [1.6.0] - 2026-07-09
 
 ### Added
