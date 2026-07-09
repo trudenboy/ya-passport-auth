@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SHA-256-hashed keys) and lock-coalesced refreshes so 401 storms cost one
   Passport call. Plus `list_yandex_music_instances` and the
   `BORROW_SOURCE_OWN` sentinel for account-source dropdowns.
+  `invalidate(token)` accepts whichever token got the 401 — x_token,
+  minted or the owner's *persisted* music token; a rejected persisted
+  token is skipped (borrower falls back to minting from x_token) until
+  the owner rotates it. `read_tokens()` returns `SecretStr` values; an
+  owner instance that is not loaded raises
+  `ResourceTemporarilyUnavailable` (startup ordering) rather than a
+  terminal `LoginFailed`.
 
 ## [1.6.0] - 2026-07-09
 

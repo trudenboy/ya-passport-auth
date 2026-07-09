@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, cast
 
 from music_assistant_models.enums import ProviderType
-from music_assistant_models.errors import LoginFailed
+from music_assistant_models.errors import LoginFailed, ResourceTemporarilyUnavailable
 
 from ya_passport_auth import SecretStr
 
@@ -42,13 +42,17 @@ __all__ = [
 # source dropdown (matches the value the yandex_ynison plugin established).
 BORROW_SOURCE_OWN: Final = "__own__"
 
-# In-memory music-token cache TTL (seconds). Yandex music tokens live ~60 min;
-# 50 min leaves 10 min headroom before the server would reject them.
+# In-memory music-token cache TTL (seconds). Bounds how long a minted token
+# is served without re-validating against Passport — after owner-side
+# rotation or revocation a borrower converges within one TTL window.
 MUSIC_TOKEN_TTL_S: Final = 50 * 60
 
 # Maximum number of distinct x_token entries kept in the music-token cache.
 # 4 covers borrow + own simultaneously with one rotation in flight.
 _MUSIC_TOKEN_CACHE_MAX: Final = 4
+
+# Maximum number of remembered rejected-token hashes (see invalidate()).
+_REJECTED_TOKENS_MAX: Final = 4
 
 
 def list_yandex_music_instances(mass: object) -> list[tuple[str, str]]:
@@ -82,13 +86,24 @@ class _CachedToken:
     expires_monotonic: float
 
 
-def _hash_x_token(x_token: str) -> str:
-    """Return the SHA-256 hex digest of an x_token, used as cache key.
+def _hash_token(token: str) -> str:
+    """Return the SHA-256 hex digest of a token, used as cache/rejection key.
 
-    The raw x_token is never stored in dict keys (defence-in-depth against
+    Raw tokens are never stored in dict keys (defence-in-depth against
     accidental log / dump leakage of the cache structure).
     """
-    return hashlib.sha256(x_token.encode("utf-8")).hexdigest()
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _secret_or_none(value: object) -> SecretStr | None:
+    """Wrap a config value as SecretStr; unwrap values already wrapped.
+
+    ``str()`` on a SecretStr would yield the redaction placeholder and
+    silently corrupt the token — unwrap explicitly instead.
+    """
+    if isinstance(value, SecretStr):
+        return value if value.get_secret() else None
+    return SecretStr(str(value)) if value else None
 
 
 class BorrowedCredentialSource:
@@ -118,22 +133,28 @@ class BorrowedCredentialSource:
         self._x_token_key = x_token_key
         self._now = now
         self._token_cache: dict[str, _CachedToken] = {}
+        # Hashes of tokens a consumer reported stale via invalidate(). Blocks
+        # the persisted-token fast path until the owner rotates the value —
+        # otherwise a 401 on the owner's persisted token would dead-end the
+        # borrower on the same stale token. Insertion-ordered, bounded.
+        self._rejected_tokens: dict[str, None] = {}
         # Coalesces concurrent in-memory refreshes (401-storm safety).
         self._refresh_lock = asyncio.Lock()
 
-    def read_tokens(self) -> tuple[str | None, str | None]:
+    def read_tokens(self) -> tuple[SecretStr | None, SecretStr | None]:
         """Read ``(music_token, x_token)`` from the owner's config.
 
         Raises:
-            LoginFailed: The linked instance is not loaded, or the configured
-                id points at something that is not a yandex_music music
-                provider — distinct messages so operators can tell the
-                "not loaded" and "unauthenticated" states apart.
+            ResourceTemporarilyUnavailable: The linked instance is not
+                loaded (yet) — a startup load-ordering condition; retry
+                later instead of treating it as an auth failure.
+            LoginFailed: The configured id points at something that is not a
+                yandex_music music provider, or its config is unreadable.
         """
         get_provider = getattr(self._mass, "get_provider", None)
         owner = get_provider(self.instance_id) if callable(get_provider) else None
         if owner is None:
-            raise LoginFailed(
+            raise ResourceTemporarilyUnavailable(
                 f"Linked Yandex Music instance '{self.instance_id}' is not loaded. "
                 "Check that the Yandex Music provider is enabled and configured."
             )
@@ -154,11 +175,9 @@ class BorrowedCredentialSource:
             raise LoginFailed(
                 f"Linked Yandex Music instance '{self.instance_id}' has no readable config."
             )
-        music_token = get_value(self._music_token_key)
-        x_token = get_value(self._x_token_key)
         return (
-            str(music_token) if music_token else None,
-            str(x_token) if x_token else None,
+            _secret_or_none(get_value(self._music_token_key)),
+            _secret_or_none(get_value(self._x_token_key)),
         )
 
     async def resolve_music_token(self) -> SecretStr:
@@ -171,44 +190,78 @@ class BorrowedCredentialSource:
         stays the single writer of persisted credentials.
 
         Raises:
-            LoginFailed: The owner is unavailable, holds no credentials, or
-                Yandex explicitly rejected the x_token.
-            ResourceTemporarilyUnavailable: Transient Passport failure.
+            LoginFailed: The owner holds no usable credentials, or Yandex
+                explicitly rejected the x_token.
+            ResourceTemporarilyUnavailable: The owner is not loaded yet, or
+                a transient Passport failure.
         """
         music_token, x_token = self.read_tokens()
-        if music_token:
-            return SecretStr(music_token)
-        if not x_token:
+        if music_token is not None and (
+            _hash_token(music_token.get_secret()) not in self._rejected_tokens
+        ):
+            return music_token
+        if x_token is None:
+            if music_token is not None:
+                raise LoginFailed(
+                    f"Linked Yandex Music instance '{self.instance_id}' has only a music "
+                    "token that was rejected, and no x_token to mint a fresh one from. "
+                    "Re-authenticate the Yandex Music provider."
+                )
             raise LoginFailed(
                 f"Linked Yandex Music instance '{self.instance_id}' has no credentials. "
                 "Authenticate the Yandex Music provider (and enable Remember session) first."
             )
-        return await self._refresh_via_x_token(x_token)
+        return await self._refresh_via_x_token(x_token.get_secret())
 
-    def invalidate(self, x_token: str) -> None:
-        """Drop the cache entry for an x_token (e.g. after a 401).
+    def invalidate(self, token: str | SecretStr) -> None:
+        """Mark *token* stale after a 401 — pass whichever token failed.
+
+        Handles all three things a consumer may hold: the owner's x_token
+        (drops the minted entry keyed by it), a minted music token (drops
+        the matching cache entry by value), and the owner's persisted music
+        token (blocks the persisted fast path until the owner rotates the
+        value, so the borrower falls back to minting from x_token instead
+        of re-serving the rejected token forever).
 
         Args:
-            x_token: The owner x_token whose minted music token proved stale.
+            token: The token that Yandex rejected.
         """
-        self._token_cache.pop(_hash_x_token(x_token), None)
+        raw = token.get_secret() if isinstance(token, SecretStr) else token
+        token_hash = _hash_token(raw)
+        self._token_cache.pop(token_hash, None)
+        for key, entry in list(self._token_cache.items()):
+            if entry.token.get_secret() == raw:
+                self._token_cache.pop(key, None)
+        self._rejected_tokens.pop(token_hash, None)
+        self._rejected_tokens[token_hash] = None
+        while len(self._rejected_tokens) > _REJECTED_TOKENS_MAX:
+            self._rejected_tokens.pop(next(iter(self._rejected_tokens)))
 
     async def _refresh_via_x_token(self, x_token: str) -> SecretStr:
-        cache_key = _hash_x_token(x_token)
-        cached = self._token_cache.get(cache_key)
-        if cached is not None and cached.expires_monotonic > self._now():
-            return cached.token
+        cache_key = _hash_token(x_token)
+        cached = self._get_fresh(cache_key)
+        if cached is not None:
+            return cached
 
         async with self._refresh_lock:
             # Double-check inside the lock — a peer caller may have refreshed
             # while we were waiting, in which case we reuse their fresh entry
             # instead of issuing a duplicate Passport call.
-            cached = self._token_cache.get(cache_key)
-            if cached is not None and cached.expires_monotonic > self._now():
-                return cached.token
+            cached = self._get_fresh(cache_key)
+            if cached is not None:
+                return cached
             token = await refresh_music_token(SecretStr(x_token))
             self._store_cached_token(cache_key, token)
             return token
+
+    def _get_fresh(self, cache_key: str) -> SecretStr | None:
+        cached = self._token_cache.get(cache_key)
+        if cached is None or cached.expires_monotonic <= self._now():
+            return None
+        # Move-to-end so eviction is LRU: a hit protects the entry.
+        self._token_cache.pop(cache_key)
+        self._token_cache[cache_key] = cached
+        return cached.token
 
     def _store_cached_token(self, cache_key: str, token: SecretStr) -> None:
         # Reordering: pop-then-set positions the (possibly-new) key as
