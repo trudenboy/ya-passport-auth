@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-07-22
+
+### Added
+
+- Public `OAuthDeviceClient` for the official Yandex OAuth Device
+  Authorization Flow with caller-owned `client_id`, `client_secret` and
+  optional `scope`. It returns service OAuth tokens unchanged and supports
+  refresh-token rotation, without Passport or Yandex Music token exchange.
+- `ya_passport_auth.ma.run_oauth_device_flow`, a provider-neutral Music
+  Assistant config-action helper. All MA providers can now reuse one hosted
+  confirmation page, popup, polling loop, route lifecycle and error mapping
+  while supplying their own OAuth application and page text.
+- `ya_passport_auth.ma.refresh_oauth_tokens` for shared, safely mapped
+  refresh-token rotation using a provider-owned OAuth application.
+
+### Changed
+
+- `DeviceCodeFlow` now contains the shared RFC 8628 polling implementation;
+  both `PassportClient` and `OAuthDeviceClient` use it.
+
 ## [1.7.0] - 2026-07-09
 
 ### Added
