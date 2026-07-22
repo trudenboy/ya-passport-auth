@@ -1,7 +1,6 @@
 """Music Assistant integration layer for the yandex providers.
 
-Shared MA-side plumbing that the five yandex providers (music, station,
-ynison, smarthome, alice) previously each carried themselves:
+Shared MA-side plumbing for Yandex-backed providers:
 
 * :mod:`~ya_passport_auth.ma.page` / :mod:`~ya_passport_auth.ma.strings` —
   the localized device-code login page;
@@ -43,12 +42,13 @@ from .flow import (
     login_with_cookies,
     require_music_token,
     run_device_flow,
+    run_oauth_device_flow,
     run_qr_flow,
 )
 from .page import DEFAULT_PAGE_STRINGS, DevicePageConfig, build_device_code_page, resolve_language
 from .routes import POST_AUTH_GRACE_SECONDS, DeviceCodeRoutes
 from .strings import resolve_page_strings, safe_locale
-from .tokens import refresh_credentials, refresh_music_token, validate_x_token
+from .tokens import refresh_credentials, refresh_music_token, refresh_oauth_tokens, validate_x_token
 
 __all__ = [
     "ACTION_AUTH_COOKIES",
@@ -76,10 +76,12 @@ __all__ = [
     "raise_mapped",
     "refresh_credentials",
     "refresh_music_token",
+    "refresh_oauth_tokens",
     "require_music_token",
     "resolve_language",
     "resolve_page_strings",
     "run_device_flow",
+    "run_oauth_device_flow",
     "run_qr_flow",
     "safe_locale",
     "validate_x_token",

@@ -11,15 +11,48 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ya_passport_auth import Credentials, PassportClient
+from ya_passport_auth import Credentials, OAuthDeviceClient, OAuthTokens, PassportClient
 from ya_passport_auth.exceptions import NetworkError, RateLimitedError, YaPassportError
 
 from .errors import raise_mapped_refresh
 
 if TYPE_CHECKING:
+    import aiohttp
+
     from ya_passport_auth import SecretStr
 
-__all__ = ["refresh_credentials", "refresh_music_token", "validate_x_token"]
+__all__ = [
+    "refresh_credentials",
+    "refresh_music_token",
+    "refresh_oauth_tokens",
+    "validate_x_token",
+]
+
+
+async def refresh_oauth_tokens(
+    *,
+    client_id: str,
+    client_secret: str | SecretStr,
+    refresh_token: str | SecretStr,
+    scope: str | None = None,
+    session: aiohttp.ClientSession | None = None,
+) -> OAuthTokens:
+    """Rotate tokens for a caller-owned Yandex OAuth application.
+
+    This is the provider-neutral counterpart to refresh_credentials. A shared
+    aiohttp session can be borrowed from Music Assistant; it is never closed
+    by this helper.
+    """
+    try:
+        async with OAuthDeviceClient.create(
+            client_id=client_id,
+            client_secret=client_secret,
+            scope=scope,
+            session=session,
+        ) as client:
+            return await client.refresh(refresh_token)
+    except YaPassportError as err:
+        raise_mapped_refresh(err, context="OAuth token refresh")
 
 
 async def refresh_music_token(x_token: SecretStr) -> SecretStr:

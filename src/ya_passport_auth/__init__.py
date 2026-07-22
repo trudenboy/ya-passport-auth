@@ -26,6 +26,7 @@ from ya_passport_auth.exceptions import (
 )
 from ya_passport_auth.flows.qr import QrSession
 from ya_passport_auth.models import AccountInfo, DeviceCodeSession, OAuthTokens
+from ya_passport_auth.oauth import OAuthDeviceClient
 
 __all__ = [
     "AccountInfo",
@@ -39,6 +40,7 @@ __all__ = [
     "LoginTimeoutError",
     "MemoryCredentialStore",
     "NetworkError",
+    "OAuthDeviceClient",
     "OAuthTokens",
     "PassportClient",
     "QRPendingError",

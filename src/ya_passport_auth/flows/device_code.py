@@ -1,9 +1,10 @@
 """OAuth Device Flow against ``oauth.yandex.ru``.
 
-Yielded tokens are equivalent to an ``x_token`` — the request uses the
-Passport Android ``client_id``/``client_secret`` pair, so the same token
-can be exchanged for a music token, passed to ``short_info``, and used
-to mint session cookies just like a QR/cookie-login result.
+The flow is parameterized by OAuth client credentials and an optional scope.
+Its defaults preserve the Passport Android behavior used by
+:class:`~ya_passport_auth.PassportClient`; callers such as the Yandex Disk
+provider can instead supply their own OAuth application and request a
+service-specific scope.
 
 The endpoint surfaces OAuth errors with HTTP 400 and a JSON body such
 as ``{"error": "authorization_pending", "error_description": "..."}``.
@@ -36,10 +37,19 @@ from ya_passport_auth.flows._payload import (
 from ya_passport_auth.flows._payload import (
     require_str as _require_str,
 )
+from ya_passport_auth.flows._polling import (
+    Confirmed,
+    Pending,
+    PollResult,
+    SlowDown,
+    drive_login,
+)
 from ya_passport_auth.logging import get_logger
 from ya_passport_auth.models import DeviceCodeSession, OAuthTokens
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from ya_passport_auth.http import SafeHttpClient
 
 __all__ = ["DeviceCodeFlow", "PollOutcome"]
@@ -63,6 +73,7 @@ _log = get_logger("device_code")
 _DEFAULT_DEVICE_NAME: Final = "ya-passport-auth"
 _DEVICE_ID_ALPHABET: Final = string.ascii_letters + string.digits
 _DEVICE_ID_LENGTH: Final = 10
+_SLOW_DOWN_INCREMENT_S: Final = 5.0
 
 
 def _generate_device_id() -> str:
@@ -73,14 +84,31 @@ def _generate_device_id() -> str:
 class DeviceCodeFlow:
     """Low-level OAuth Device Flow steps.
 
-    The high-level :class:`~ya_passport_auth.PassportClient` composes these
-    into a full flow with polling, timeout, and cancellation.
+    :class:`~ya_passport_auth.PassportClient` and
+    :class:`~ya_passport_auth.OAuthDeviceClient` compose these steps into a
+    full flow with polling, timeout, and cancellation.
     """
 
-    __slots__ = ("_http",)
+    __slots__ = ("_client_id", "_client_secret", "_http", "_scope")
 
-    def __init__(self, *, http: SafeHttpClient) -> None:
+    def __init__(
+        self,
+        *,
+        http: SafeHttpClient,
+        client_id: str = PASSPORT_CLIENT_ID,
+        client_secret: str | SecretStr = PASSPORT_CLIENT_SECRET,
+        scope: str | None = None,
+    ) -> None:
+        if not client_id:
+            raise ValueError("client_id must not be empty")
+        if isinstance(client_secret, str):
+            client_secret = SecretStr(client_secret)
+        if scope is not None and not scope.strip():
+            raise ValueError("scope must be None or a non-empty string")
         self._http = http
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._scope = scope
 
     async def request_code(
         self,
@@ -99,14 +127,14 @@ class DeviceCodeFlow:
             AuthFailedError: If the server response is missing an expected
                 field or contains an OAuth ``error`` value.
         """
-        data = await self._http.post_json(
-            DEVICE_CODE_URL,
-            data={
-                "client_id": PASSPORT_CLIENT_ID,
-                "device_id": device_id or _generate_device_id(),
-                "device_name": device_name or _DEFAULT_DEVICE_NAME,
-            },
-        )
+        request_data: dict[str, object] = {
+            "client_id": self._client_id,
+            "device_id": device_id or _generate_device_id(),
+            "device_name": device_name or _DEFAULT_DEVICE_NAME,
+        }
+        if self._scope is not None:
+            request_data["scope"] = self._scope
+        data = await self._http.post_json(DEVICE_CODE_URL, data=request_data)
 
         error = data.get("error")
         if isinstance(error, str):
@@ -152,8 +180,8 @@ class DeviceCodeFlow:
             data={
                 "grant_type": "device_code",
                 "code": device_code.get_secret(),
-                "client_id": PASSPORT_CLIENT_ID,
-                "client_secret": PASSPORT_CLIENT_SECRET,
+                "client_id": self._client_id,
+                "client_secret": self._client_secret.get_secret(),
             },
         )
         return _parse_token_response(data)
@@ -171,8 +199,8 @@ class DeviceCodeFlow:
             data={
                 "grant_type": "refresh_token",
                 "refresh_token": refresh_token.get_secret(),
-                "client_id": PASSPORT_CLIENT_ID,
-                "client_secret": PASSPORT_CLIENT_SECRET,
+                "client_id": self._client_id,
+                "client_secret": self._client_secret.get_secret(),
             },
         )
 
@@ -195,6 +223,43 @@ class DeviceCodeFlow:
                 endpoint=OAUTH_TOKEN_URL,
             )
         return tokens
+
+    async def poll_until_confirmed(
+        self,
+        session: DeviceCodeSession,
+        *,
+        poll_interval: float | None = None,
+        total_timeout: float | None = None,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> OAuthTokens:
+        """Poll until the user confirms *session* and return OAuth tokens."""
+        interval = session.interval if poll_interval is None else poll_interval
+        timeout = session.expires_in if total_timeout is None else total_timeout
+        if interval <= 0:
+            raise ValueError("poll_interval must be positive")
+        if timeout <= 0:
+            raise ValueError("total_timeout must be positive")
+
+        async def _poll() -> PollResult[OAuthTokens]:
+            result = await self.poll_token(session.device_code)
+            if isinstance(result, OAuthTokens):
+                return Confirmed(result)
+            if result is PollOutcome.SLOW_DOWN:
+                _log.warning(
+                    "slow_down received; increasing poll interval by %.1fs",
+                    _SLOW_DOWN_INCREMENT_S,
+                )
+                return SlowDown(_SLOW_DOWN_INCREMENT_S)
+            return Pending()
+
+        return await drive_login(
+            poll_one=_poll,
+            interval=interval,
+            total_timeout=timeout,
+            timeout_exc=DeviceCodeTimeoutError,
+            timeout_message="device polling timed out",
+            should_cancel=should_cancel,
+        )
 
 
 def _parse_token_response(data: dict[str, object]) -> OAuthTokens | PollOutcome:

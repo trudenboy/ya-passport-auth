@@ -22,7 +22,7 @@
 - **Async-native** — built on `aiohttp` with `asyncio.Lock`-protected
   rate limiter and connection management.
 - **Strictly typed** — `mypy --strict` clean, PEP 561 `py.typed` marker.
-- **Well tested** — 448 tests, 97 % branch coverage.
+- **Well tested** — 464 tests, 97 % branch coverage.
 
 ## Installation
 
@@ -83,6 +83,54 @@ new_creds = await client.refresh_credentials(creds)
 Only device-flow credentials carry a `refresh_token`; QR/cookie-login
 credentials have `refresh_token=None` and cannot be silently refreshed.
 
+### Device flow for a caller-owned OAuth application
+
+Service providers can use the same polling implementation with their own
+Yandex OAuth application. The returned tokens are not converted to Passport
+or Yandex Music credentials:
+
+```python
+from ya_passport_auth import OAuthDeviceClient
+
+async def service_login():
+    async with OAuthDeviceClient.create(
+        client_id="your-client-id",
+        client_secret="your-client-secret",
+        scope="cloud_api:disk.read",
+    ) as client:
+        tokens = await client.login_device_code(
+            on_code=lambda code: print(code.verification_url, code.user_code)
+        )
+        # Persist tokens.refresh_token for silent rotation.
+```
+
+Music Assistant providers should use the universal hosted-page wrapper:
+
+```python
+from ya_passport_auth.ma import (
+    DevicePageConfig,
+    refresh_oauth_tokens,
+    run_oauth_device_flow,
+)
+
+tokens = await run_oauth_device_flow(
+    mass,
+    values["session_id"],
+    DevicePageConfig(domain="my_yandex_provider"),
+    client_id=client_id,
+    client_secret=client_secret,
+    scope="service.scope",
+)
+
+tokens = await refresh_oauth_tokens(
+    client_id=client_id,
+    client_secret=client_secret,
+    refresh_token=tokens.refresh_token,
+    scope="service.scope",
+    session=mass.http_session,
+)
+```
+
 ### Cookie login
 
 ```python
@@ -110,6 +158,9 @@ PassportClient  (public facade)
     ├── AccountInfoFetcher → x_token → uid/login/avatar
     ├── QuasarCsrfFetcher  → CSRF token for IoT API
     └── GlagolDeviceTokenFetcher → music_token → Glagol device token
+
+OAuthDeviceClient  (caller-owned Yandex OAuth application)
+└── DeviceCodeFlow → service-scoped access_token + refresh_token
 ```
 
 ## API overview
@@ -132,6 +183,15 @@ PassportClient  (public facade)
 | `get_glagol_device_token(music_token, ...)` | Glagol device token |
 | `fetch_account_info(x_token)` | Account metadata |
 | `validate_x_token(x_token)` | Check if token is valid |
+
+### `OAuthDeviceClient`
+
+| Method | Description |
+|--------|-------------|
+| `start_device_login(...)` | Begin Device Flow for a caller-owned OAuth app |
+| `poll_device_until_confirmed(session, ...)` | Poll and return unchanged `OAuthTokens` |
+| `login_device_code(on_code=..., ...)` | Run both phases with a UI callback |
+| `refresh(refresh_token)` | Rotate the service OAuth token pair |
 
 ### `SecretStr`
 
@@ -186,11 +246,11 @@ YaPassportError
 
 ## Security disclaimer
 
-This library interacts with Yandex Passport using **public mobile OAuth client
-IDs and secrets** extracted from official Yandex Android applications. These
-values are well-known and present in many open-source projects; they are
-treated here as constants, not secrets. Do not use this library for anything
-other than authenticating into your own Yandex account.
+The Passport-specific client interacts with Yandex using **public mobile OAuth
+client IDs and secrets** extracted from official Yandex Android applications.
+These values are well-known and present in many open-source projects; they are
+treated here as constants, not secrets. `OAuthDeviceClient`, by contrast,
+accepts credentials for an application owned by its caller.
 
 There is no official Yandex API for the mobile Passport flow. Endpoints,
 response shapes, and regex patterns may break without notice.

@@ -118,6 +118,47 @@ class TestRequestCode:
         assert _form_field(calls[0].kwargs, "device_name") == "my-device-name"
         assert _form_field(calls[0].kwargs, "client_id") == PASSPORT_CLIENT_ID
 
+    async def test_custom_oauth_application_and_scope(self, http: SafeHttpClient) -> None:
+        flow = DeviceCodeFlow(
+            http=http,
+            client_id="provider-client-id",
+            client_secret=SecretStr("provider-client-secret"),
+            scope="cloud_api:disk.read",
+        )
+        with aioresponses() as m:
+            m.post(
+                DEVICE_CODE_URL,
+                status=200,
+                payload={
+                    "device_code": _TEST_DEVICE_CODE,
+                    "user_code": _TEST_USER_CODE,
+                    "verification_url": _TEST_VERIFICATION_URL,
+                    "expires_in": 300,
+                    "interval": 5,
+                },
+                headers=_JSON_CT,
+            )
+            await flow.request_code()
+            calls = m.requests[("POST", URL(DEVICE_CODE_URL))]
+
+        assert _form_field(calls[0].kwargs, "client_id") == "provider-client-id"
+        assert _form_field(calls[0].kwargs, "scope") == "cloud_api:disk.read"
+
+    @pytest.mark.parametrize(
+        ("client_id", "scope"),
+        [("", None), ("client", ""), ("client", "   ")],
+    )
+    def test_rejects_invalid_configuration(
+        self, http: SafeHttpClient, client_id: str, scope: str | None
+    ) -> None:
+        with pytest.raises(ValueError):
+            DeviceCodeFlow(
+                http=http,
+                client_id=client_id,
+                client_secret="secret",
+                scope=scope,
+            )
+
     async def test_generated_device_id_format(self, flow: DeviceCodeFlow) -> None:
         with aioresponses() as m:
             m.post(
@@ -229,6 +270,29 @@ class TestPollToken:
         assert _form_field(calls[0].kwargs, "code") == _TEST_DEVICE_CODE
         assert _form_field(calls[0].kwargs, "client_id") == PASSPORT_CLIENT_ID
         assert _form_field(calls[0].kwargs, "client_secret") == PASSPORT_CLIENT_SECRET
+
+    async def test_custom_client_credentials(self, http: SafeHttpClient) -> None:
+        flow = DeviceCodeFlow(
+            http=http,
+            client_id="provider-client-id",
+            client_secret="provider-client-secret",
+        )
+        with aioresponses() as m:
+            m.post(
+                OAUTH_TOKEN_URL,
+                status=200,
+                payload={
+                    "access_token": _TEST_ACCESS_TOKEN,
+                    "refresh_token": _TEST_REFRESH_TOKEN,
+                    "expires_in": 1,
+                },
+                headers=_JSON_CT,
+            )
+            await flow.poll_token(SecretStr(_TEST_DEVICE_CODE))
+            calls = m.requests[("POST", URL(OAUTH_TOKEN_URL))]
+
+        assert _form_field(calls[0].kwargs, "client_id") == "provider-client-id"
+        assert _form_field(calls[0].kwargs, "client_secret") == "provider-client-secret"
 
     async def test_authorization_pending_returns_pending(self, flow: DeviceCodeFlow) -> None:
         with aioresponses() as m:

@@ -10,14 +10,13 @@ from __future__ import annotations
 
 import inspect
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
 import aiohttp
 
 from ya_passport_auth.config import ClientConfig
 from ya_passport_auth.credentials import Credentials, SecretStr
 from ya_passport_auth.exceptions import (
-    DeviceCodeTimeoutError,
     InvalidCredentialsError,
     QRTimeoutError,
     YaPassportError,
@@ -26,7 +25,6 @@ from ya_passport_auth.flows._polling import (
     Confirmed,
     Pending,
     PollResult,
-    SlowDown,
     drive_login,
 )
 from ya_passport_auth.flows._token_exchange import (
@@ -35,14 +33,14 @@ from ya_passport_auth.flows._token_exchange import (
     exchange_x_token_for_music_token,
 )
 from ya_passport_auth.flows.account import AccountInfoFetcher
-from ya_passport_auth.flows.device_code import DeviceCodeFlow, PollOutcome
+from ya_passport_auth.flows.device_code import DeviceCodeFlow
 from ya_passport_auth.flows.glagol import GlagolDeviceTokenFetcher
 from ya_passport_auth.flows.qr import QrLoginFlow, QrSession
 from ya_passport_auth.flows.quasar import QuasarCsrfFetcher
 from ya_passport_auth.flows.session import PassportSessionRefresher
 from ya_passport_auth.http import SafeHttpClient
 from ya_passport_auth.logging import get_logger
-from ya_passport_auth.models import AccountInfo, DeviceCodeSession, OAuthTokens
+from ya_passport_auth.models import AccountInfo, DeviceCodeSession
 from ya_passport_auth.rate_limit import AsyncMinDelayLimiter
 
 if TYPE_CHECKING:
@@ -51,10 +49,6 @@ if TYPE_CHECKING:
 __all__ = ["PassportClient"]
 
 _log = get_logger("client")
-
-# RFC 8628 §3.5: on ``slow_down`` the client MUST increase its polling
-# interval by at least 5 seconds for this and all subsequent requests.
-_SLOW_DOWN_INCREMENT_S: Final = 5.0
 
 
 class PassportClient:
@@ -222,31 +216,10 @@ class PassportClient:
         :class:`DeviceCodeTimeoutError` if the deadline elapses and
         :class:`InvalidCredentialsError` if ``should_cancel`` returns ``True``.
         """
-        interval = session.interval if poll_interval is None else poll_interval
-        timeout = session.expires_in if total_timeout is None else total_timeout
-        if interval <= 0:
-            raise ValueError("poll_interval must be positive")
-        if timeout <= 0:
-            raise ValueError("total_timeout must be positive")
-
-        async def _poll() -> PollResult[OAuthTokens]:
-            result = await self._device.poll_token(session.device_code)
-            if isinstance(result, OAuthTokens):
-                return Confirmed(result)
-            if result is PollOutcome.SLOW_DOWN:
-                _log.warning(
-                    "slow_down received; increasing poll interval by %.1fs",
-                    _SLOW_DOWN_INCREMENT_S,
-                )
-                return SlowDown(_SLOW_DOWN_INCREMENT_S)
-            return Pending()
-
-        tokens = await drive_login(
-            poll_one=_poll,
-            interval=interval,
-            total_timeout=timeout,
-            timeout_exc=DeviceCodeTimeoutError,
-            timeout_message="device polling timed out",
+        tokens = await self._device.poll_until_confirmed(
+            session,
+            poll_interval=poll_interval,
+            total_timeout=total_timeout,
             should_cancel=should_cancel,
         )
         _log.info("Device code confirmed")

@@ -7,7 +7,13 @@ from typing import Self
 import pytest
 from music_assistant_models.errors import LoginFailed, ResourceTemporarilyUnavailable
 
-from ya_passport_auth import Credentials, PassportClient, SecretStr
+from ya_passport_auth import (
+    Credentials,
+    OAuthDeviceClient,
+    OAuthTokens,
+    PassportClient,
+    SecretStr,
+)
 from ya_passport_auth.exceptions import (
     AuthFailedError,
     InvalidCredentialsError,
@@ -15,7 +21,12 @@ from ya_passport_auth.exceptions import (
     RateLimitedError,
     YaPassportError,
 )
-from ya_passport_auth.ma.tokens import refresh_credentials, refresh_music_token, validate_x_token
+from ya_passport_auth.ma.tokens import (
+    refresh_credentials,
+    refresh_music_token,
+    refresh_oauth_tokens,
+    validate_x_token,
+)
 
 _X = SecretStr("test-x-token-0123456789")
 _REFRESH = SecretStr("test-refresh-token-0123456789")
@@ -52,11 +63,82 @@ class _FakeClient:
         return self.valid
 
 
+class _FakeOAuthClient:
+    def __init__(self) -> None:
+        self.error: Exception | None = None
+        self.create_kwargs: dict[str, object] = {}
+        self.seen_refresh: str | SecretStr | None = None
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        return None
+
+    async def refresh(self, refresh_token: str | SecretStr) -> OAuthTokens:
+        self.seen_refresh = refresh_token
+        if self.error is not None:
+            raise self.error
+        return OAuthTokens(
+            access_token=SecretStr("service-access-token"),
+            refresh_token=SecretStr("service-refresh-token"),
+            expires_in=3600,
+        )
+
+
 @pytest.fixture
 def fake_client(monkeypatch: pytest.MonkeyPatch) -> _FakeClient:
     client = _FakeClient()
     monkeypatch.setattr(PassportClient, "create", lambda config=None: client)
     return client
+
+
+@pytest.fixture
+def fake_oauth_client(monkeypatch: pytest.MonkeyPatch) -> _FakeOAuthClient:
+    client = _FakeOAuthClient()
+
+    def create(**kwargs: object) -> _FakeOAuthClient:
+        client.create_kwargs = kwargs
+        return client
+
+    monkeypatch.setattr(OAuthDeviceClient, "create", create)
+    return client
+
+
+class TestRefreshOAuthTokens:
+    async def test_success_and_configuration(self, fake_oauth_client: _FakeOAuthClient) -> None:
+        tokens = await refresh_oauth_tokens(
+            client_id="provider-client",
+            client_secret="provider-secret",
+            refresh_token="old-refresh",
+            scope="service.scope",
+        )
+        assert tokens.access_token.get_secret() == "service-access-token"
+        assert fake_oauth_client.seen_refresh == "old-refresh"
+        assert fake_oauth_client.create_kwargs == {
+            "client_id": "provider-client",
+            "client_secret": "provider-secret",
+            "scope": "service.scope",
+            "session": None,
+        }
+
+    async def test_rejection_is_terminal(self, fake_oauth_client: _FakeOAuthClient) -> None:
+        fake_oauth_client.error = InvalidCredentialsError("rejected")
+        with pytest.raises(LoginFailed):
+            await refresh_oauth_tokens(
+                client_id="client",
+                client_secret="secret",
+                refresh_token=_REFRESH,
+            )
+
+    async def test_unknown_failure_is_transient(self, fake_oauth_client: _FakeOAuthClient) -> None:
+        fake_oauth_client.error = AuthFailedError("server error")
+        with pytest.raises(ResourceTemporarilyUnavailable):
+            await refresh_oauth_tokens(
+                client_id="client",
+                client_secret="secret",
+                refresh_token=_REFRESH,
+            )
 
 
 class TestRefreshMusicToken:

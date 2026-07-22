@@ -13,7 +13,15 @@ from music_assistant_models.errors import (
     ResourceTemporarilyUnavailable,
 )
 
-from ya_passport_auth import Credentials, DeviceCodeSession, PassportClient, QrSession, SecretStr
+from ya_passport_auth import (
+    Credentials,
+    DeviceCodeSession,
+    OAuthDeviceClient,
+    OAuthTokens,
+    PassportClient,
+    QrSession,
+    SecretStr,
+)
 from ya_passport_auth.exceptions import (
     DeviceCodeTimeoutError,
     InvalidCredentialsError,
@@ -23,6 +31,7 @@ from ya_passport_auth.ma.flow import (
     login_with_cookies,
     require_music_token,
     run_device_flow,
+    run_oauth_device_flow,
     run_qr_flow,
 )
 from ya_passport_auth.ma.page import DevicePageConfig
@@ -99,10 +108,59 @@ class _FakeClient:
         return self.poll_result
 
 
+class _FakeOAuthClient:
+    """Stands in for OAuthDeviceClient inside provider-owned flows."""
+
+    def __init__(self) -> None:
+        self.poll_result = OAuthTokens(
+            access_token=SecretStr("oauth-access-token-0123456789"),
+            refresh_token=SecretStr("oauth-refresh-token-0123456789"),
+            expires_in=3600,
+        )
+        self.poll_error: BaseException | None = None
+        self.create_kwargs: dict[str, object] = {}
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        return None
+
+    async def start_device_login(self, device_name: str | None = None) -> DeviceCodeSession:
+        self.device_name = device_name
+        return DeviceCodeSession(
+            device_code=SecretStr("oauth-device-code"),
+            user_code="OAUTH-123",
+            verification_url="https://ya.ru/device",
+            interval=1,
+            expires_in=300,
+        )
+
+    async def poll_device_until_confirmed(
+        self, session: DeviceCodeSession, *, total_timeout: float | None = None
+    ) -> OAuthTokens:
+        self.total_timeout = total_timeout
+        if self.poll_error is not None:
+            raise self.poll_error
+        return self.poll_result
+
+
 @pytest.fixture
 def fake_client(monkeypatch: pytest.MonkeyPatch) -> _FakeClient:
     client = _FakeClient()
     monkeypatch.setattr(PassportClient, "create", lambda **_kw: client)
+    return client
+
+
+@pytest.fixture
+def fake_oauth_client(monkeypatch: pytest.MonkeyPatch) -> _FakeOAuthClient:
+    client = _FakeOAuthClient()
+
+    def create(**kwargs: object) -> _FakeOAuthClient:
+        client.create_kwargs = kwargs
+        return client
+
+    monkeypatch.setattr(OAuthDeviceClient, "create", create)
     return client
 
 
@@ -197,6 +255,62 @@ class TestRunDeviceFlow:
         )
         assert fake_client.device_name == "Music Assistant"
         assert fake_client.total_timeout == 120
+
+
+class TestRunOAuthDeviceFlow:
+    async def test_returns_tokens_and_forwards_provider_configuration(
+        self, fake_mass: FakeMass, fake_oauth_client: _FakeOAuthClient
+    ) -> None:
+        tokens = await run_oauth_device_flow(
+            fake_mass,
+            "session-1",
+            _PAGE,
+            client_id="provider-client",
+            client_secret="provider-secret",
+            scope="cloud_api:disk.read",
+            device_name="Music Assistant Disk",
+            total_timeout=180,
+        )
+
+        assert tokens.refresh_token.get_secret() == "oauth-refresh-token-0123456789"
+        assert fake_oauth_client.create_kwargs == {
+            "client_id": "provider-client",
+            "client_secret": "provider-secret",
+            "scope": "cloud_api:disk.read",
+        }
+        assert fake_oauth_client.device_name == "Music Assistant Disk"
+        assert fake_oauth_client.total_timeout == 180
+        helper = StubAuthenticationHelper.instances[-1]
+        assert helper.sent_urls == [
+            f"{fake_mass.webserver.base_url}/yandex_test/device_code/session-1"
+        ]
+        assert await _served_status(fake_mass) == {"state": "done"}
+
+    async def test_maps_poll_failure_and_updates_page(
+        self, fake_mass: FakeMass, fake_oauth_client: _FakeOAuthClient
+    ) -> None:
+        fake_oauth_client.poll_error = InvalidCredentialsError("denied")
+        with pytest.raises(LoginFailed, match="denied"):
+            await run_oauth_device_flow(
+                fake_mass,
+                "session-1",
+                _PAGE,
+                client_id="client",
+                client_secret="secret",
+            )
+        assert await _served_status(fake_mass) == {"state": "failed", "reason": "denied"}
+
+    async def test_rejects_unsafe_session_id(
+        self, fake_mass: FakeMass, fake_oauth_client: _FakeOAuthClient
+    ) -> None:
+        with pytest.raises(InvalidDataError):
+            await run_oauth_device_flow(
+                fake_mass,
+                "../bad",
+                _PAGE,
+                client_id="client",
+                client_secret="secret",
+            )
 
 
 class TestRunQrFlow:

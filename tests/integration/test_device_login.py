@@ -187,7 +187,7 @@ class TestPollDeviceUntilConfirmed:
     ) -> None:
         # The real RFC 8628 increment is 5 s; shrink it so the test doesn't
         # incur real wall-clock waits via asyncio.sleep.
-        monkeypatch.setattr("ya_passport_auth.client._SLOW_DOWN_INCREMENT_S", 0.001)
+        monkeypatch.setattr("ya_passport_auth.flows.device_code._SLOW_DOWN_INCREMENT_S", 0.001)
         caplog.set_level(logging.WARNING, logger="ya_passport_auth")
 
         async with PassportClient.create(config=_fast_config()) as client:
