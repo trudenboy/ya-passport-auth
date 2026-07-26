@@ -22,7 +22,7 @@
 - **Async-native** — built on `aiohttp` with `asyncio.Lock`-protected
   rate limiter and connection management.
 - **Strictly typed** — `mypy --strict` clean, PEP 561 `py.typed` marker.
-- **Well tested** — 464 tests, 97 % branch coverage.
+- **Well tested** — 386 tests, 97 % branch coverage.
 
 ## Installation
 
@@ -30,9 +30,8 @@
 pip install ya-passport-auth
 ```
 
-With the Music Assistant integration layer (shared device-code login page,
-config-entry builders and the silent credential-refresh cascade used by the
-MA yandex providers):
+With the Music Assistant credential helpers (token refresh/rotation, shared
+accounts, and cookie parsing used by the MA Yandex providers):
 
 ```
 pip install ya-passport-auth[ma]
@@ -104,23 +103,11 @@ async def service_login():
         # Persist tokens.refresh_token for silent rotation.
 ```
 
-Music Assistant providers should use the universal hosted-page wrapper:
+Music Assistant providers present the code in their own setup UI and can use
+the MA helper for silent rotation:
 
 ```python
-from ya_passport_auth.ma import (
-    DevicePageConfig,
-    refresh_oauth_tokens,
-    run_oauth_device_flow,
-)
-
-tokens = await run_oauth_device_flow(
-    mass,
-    values["session_id"],
-    DevicePageConfig(domain="my_yandex_provider"),
-    client_id=client_id,
-    client_secret=client_secret,
-    scope="service.scope",
-)
+from ya_passport_auth.ma import refresh_oauth_tokens
 
 tokens = await refresh_oauth_tokens(
     client_id=client_id,
