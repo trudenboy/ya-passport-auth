@@ -30,8 +30,8 @@
 pip install ya-passport-auth
 ```
 
-With the Music Assistant integration layer (shared device-code login page,
-config-entry builders and the silent credential-refresh cascade used by the
+With the Music Assistant integration layer (token maintenance, the silent
+credential-refresh cascade, and borrowed-credentials support used by the
 MA yandex providers):
 
 ```
@@ -104,23 +104,12 @@ async def service_login():
         # Persist tokens.refresh_token for silent rotation.
 ```
 
-Music Assistant providers should use the universal hosted-page wrapper:
+Music Assistant providers drive `OAuthDeviceClient` directly from their setup
+flow (rendering the code in their own UI) and use `refresh_oauth_tokens` for
+silent rotation:
 
 ```python
-from ya_passport_auth.ma import (
-    DevicePageConfig,
-    refresh_oauth_tokens,
-    run_oauth_device_flow,
-)
-
-tokens = await run_oauth_device_flow(
-    mass,
-    values["session_id"],
-    DevicePageConfig(domain="my_yandex_provider"),
-    client_id=client_id,
-    client_secret=client_secret,
-    scope="service.scope",
-)
+from ya_passport_auth.ma import refresh_oauth_tokens
 
 tokens = await refresh_oauth_tokens(
     client_id=client_id,

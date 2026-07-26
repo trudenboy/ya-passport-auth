@@ -23,7 +23,7 @@ from ya_passport_auth.exceptions import (
     YaPassportError,
 )
 
-__all__ = ["failure_reason", "raise_mapped", "raise_mapped_refresh"]
+__all__ = ["raise_mapped", "raise_mapped_refresh"]
 
 
 def raise_mapped(err: YaPassportError, *, context: str) -> NoReturn:
@@ -79,21 +79,3 @@ def raise_mapped_refresh(err: YaPassportError, *, context: str) -> NoReturn:
     raise ResourceTemporarilyUnavailable(
         f"{context}: unexpected Yandex Passport response ({type(err).__name__}) — retry later"
     ) from err
-
-
-def failure_reason(err: Exception) -> str:
-    """Return the status-endpoint failure reason for a polling error.
-
-    Args:
-        err: The exception raised while polling for login confirmation.
-
-    Returns:
-        ``"expired"`` for a device-code timeout, ``"denied"`` for rejected
-        credentials, ``"error"`` otherwise — the device-code page shows a
-        matching terminal message.
-    """
-    if isinstance(err, DeviceCodeTimeoutError):
-        return "expired"
-    if isinstance(err, InvalidCredentialsError):
-        return "denied"
-    return "error"
