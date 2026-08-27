@@ -152,7 +152,11 @@ class BorrowedCredentialSource:
                 yandex_music music provider, or its config is unreadable.
         """
         get_provider = getattr(self._mass, "get_provider", None)
-        owner = get_provider(self.instance_id) if callable(get_provider) else None
+        owner = (
+            get_provider(self.instance_id, return_unavailable=True)
+            if callable(get_provider)
+            else None
+        )
         if owner is None:
             raise ResourceTemporarilyUnavailable(
                 f"Linked Yandex Music instance '{self.instance_id}' is not loaded. "
