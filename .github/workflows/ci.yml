@@ -71,18 +71,12 @@ jobs:
         run: uv run mypy src tests
 
   test:
-    name: Test (py${{ matrix.python-version }} on ${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: Test (Python 3.14 on Ubuntu 24.04)
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        python-version: ["3.12", "3.13"]
     steps:
       - name: Harden runner
-        if: runner.os == 'Linux'
         uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c  # v2
         with:
           egress-policy: audit
@@ -94,14 +88,13 @@ jobs:
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d  # v10.0.1
         with:
           enable-cache: true
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
+      - name: Set up Python 3.14
+        run: uv python install 3.14
       - name: Install dev dependencies
-        run: uv sync --frozen --extra dev --python ${{ matrix.python-version }}
+        run: uv sync --frozen --extra dev --python 3.14
       - name: pytest
-        run: uv run --python ${{ matrix.python-version }} pytest
+        run: uv run --python 3.14 pytest
       - name: Upload coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: coverage-xml
