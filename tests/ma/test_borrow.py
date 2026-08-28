@@ -46,7 +46,8 @@ class _Mass:
     def __init__(self, providers: dict[str, object] | None = None) -> None:
         self._providers = providers or {}
 
-    def get_provider(self, instance_id: str) -> object | None:
+    def get_provider(self, instance_id: str, *, return_unavailable: bool = False) -> object | None:
+        """Return the configured test provider."""
         return self._providers.get(instance_id)
 
 
@@ -64,7 +65,7 @@ def clock() -> _Clock:
 
 
 def _source(
-    mass: _Mass, clock: Callable[[], float], instance_id: str = "ym-1"
+    mass: object, clock: Callable[[], float], instance_id: str = "ym-1"
 ) -> BorrowedCredentialSource:
     return BorrowedCredentialSource(mass, instance_id, now=clock)
 
@@ -114,6 +115,22 @@ class TestReadTokens:
         # borrower must retry later, not flip into a terminal auth failure.
         with pytest.raises(ResourceTemporarilyUnavailable, match="is not loaded"):
             _source(_Mass(), clock).read_tokens()
+
+    def test_reads_unavailable_linked_instance_without_falling_back(self, clock: _Clock) -> None:
+        """Linked credentials are never read from an available sibling instance."""
+        linked_owner = _Owner({"token": "test-music-linked", "x_token": "test-x-linked"})
+        fallback_owner = _Owner({"token": "test-music-fallback", "x_token": "test-x-fallback"})
+
+        class _FallbackMass:
+            def get_provider(
+                self, _instance_id: str, *, return_unavailable: bool = False
+            ) -> object:
+                return linked_owner if return_unavailable else fallback_owner
+
+        assert _secrets(_source(_FallbackMass(), clock).read_tokens()) == (
+            "test-music-linked",
+            "test-x-linked",
+        )
 
     def test_wrong_domain_guard(self, clock: _Clock) -> None:
         mass = _Mass({"ym-1": _Owner({}, domain="spotify")})
