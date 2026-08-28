@@ -97,6 +97,25 @@ class TestAcquire:
 
 
 class TestConcurrency:
+    async def test_rechecks_time_after_early_wakeup(self, clock: FakeClock) -> None:
+        """An early wake-up must not let an acquire return before its deadline."""
+        sleep_calls: list[float] = []
+
+        async def early_sleep(seconds: float) -> None:
+            sleep_calls.append(seconds)
+            clock.now += seconds / 2 if len(sleep_calls) == 1 else seconds
+
+        limiter = AsyncMinDelayLimiter(
+            min_interval_seconds=0.2,
+            monotonic=clock.monotonic,
+            sleep=early_sleep,
+        )
+        await limiter.acquire()
+        await limiter.acquire()
+
+        assert clock.now == pytest.approx(0.2)
+        assert sleep_calls == [pytest.approx(0.2), pytest.approx(0.1)]
+
     async def test_concurrent_acquires_serialise(self) -> None:
         """Real event loop. Two coroutines racing on one limiter must
         observe a real-time gap of at least ``min_interval_seconds``."""

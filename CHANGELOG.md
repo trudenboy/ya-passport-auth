@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated the pinned GitHub Actions used for CI, security scanning, build,
   signing, and release publishing.
 
+### Fixed
+
+- `AsyncMinDelayLimiter` now rechecks the monotonic clock after a sleep before
+  returning, preventing an early event-loop wake-up from violating its minimum
+  request interval.
+
 ## [2.0.0] - 2026-08-28
 
 ### Changed
