@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-08-28
+
+### Changed
+
+- Music Assistant providers now present QR and Device Flow logins themselves
+  through `PassportClient.start_device_login`,
+  `PassportClient.poll_device_until_confirmed`,
+  `PassportClient.start_qr_login`, and
+  `PassportClient.poll_qr_until_confirmed`. The remaining `ya_passport_auth.ma`
+  package is limited to credential, token, cascade, and borrowed-account
+  helpers.
+- `login_with_cookies` and `require_music_token` remain available from both
+  `ya_passport_auth.ma` and `ya_passport_auth.ma.flow`.
+
+### Removed
+
+- The obsolete Music Assistant `AuthenticationHelper` integration:
+  `run_device_flow`, `run_qr_flow`, and `run_oauth_device_flow`.
+- The hosted device-code page/routes and standard authentication config-entry
+  builders that only supported those flows.
+
+### Migration
+
+- Present QR and Device Flow in the owning provider's setup UI with
+  `PassportClient` or `OAuthDeviceClient`; these public clients retain the
+  corresponding login primitives.
+- Keep using the remaining `ya_passport_auth.ma` credential, token, cascade,
+  and borrowed-account helpers unchanged.
+
 ## [1.8.0] - 2026-07-22
 
 ### Added

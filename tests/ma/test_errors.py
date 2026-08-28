@@ -13,7 +13,7 @@ from ya_passport_auth.exceptions import (
     RateLimitedError,
     YaPassportError,
 )
-from ya_passport_auth.ma.errors import failure_reason, raise_mapped
+from ya_passport_auth.ma.errors import raise_mapped
 
 
 class TestRaiseMapped:
@@ -43,14 +43,3 @@ class TestRaiseMapped:
         with pytest.raises(LoginFailed) as excinfo:
             raise_mapped(YaPassportError(secret), context="X")
         assert secret not in str(excinfo.value)
-
-
-class TestFailureReason:
-    def test_expired(self) -> None:
-        assert failure_reason(DeviceCodeTimeoutError("t")) == "expired"
-
-    def test_denied(self) -> None:
-        assert failure_reason(InvalidCredentialsError("no")) == "denied"
-
-    def test_error(self) -> None:
-        assert failure_reason(RuntimeError("x")) == "error"

@@ -1,4 +1,5 @@
-"""Unified mapping of library exceptions onto Music Assistant error types.
+"""
+Unified mapping of library exceptions onto Music Assistant error types.
 
 Transient Passport failures (network, rate limiting) map to
 ``ResourceTemporarilyUnavailable`` so providers retry later instead of
@@ -23,16 +24,17 @@ from ya_passport_auth.exceptions import (
     YaPassportError,
 )
 
-__all__ = ["failure_reason", "raise_mapped", "raise_mapped_refresh"]
+__all__ = ["raise_mapped", "raise_mapped_refresh"]
 
 
 def raise_mapped(err: YaPassportError, *, context: str) -> NoReturn:
-    """Re-raise a library error as the matching Music Assistant error.
+    """
+    Re-raise a library error as the matching Music Assistant error.
 
     Args:
         err: The ``ya_passport_auth`` exception to translate.
-        context: Short human prefix for the message (e.g. ``"Device
-            authentication"`` or ``"Failed to refresh music token"``).
+        context: Short human prefix for the message (e.g.
+            ``"Cookie authentication"``).
 
     Raises:
         ResourceTemporarilyUnavailable: For transient failures (network,
@@ -51,7 +53,8 @@ def raise_mapped(err: YaPassportError, *, context: str) -> NoReturn:
 
 
 def raise_mapped_refresh(err: YaPassportError, *, context: str) -> NoReturn:
-    """Re-raise a library error from a silent token refresh/rotation.
+    """
+    Re-raise a library error from a silent token refresh/rotation.
 
     Unlike interactive login flows, a refresh acts on *stored* credentials —
     callers clear them on ``LoginFailed``. Only an explicit rejection
@@ -79,21 +82,3 @@ def raise_mapped_refresh(err: YaPassportError, *, context: str) -> NoReturn:
     raise ResourceTemporarilyUnavailable(
         f"{context}: unexpected Yandex Passport response ({type(err).__name__}) — retry later"
     ) from err
-
-
-def failure_reason(err: Exception) -> str:
-    """Return the status-endpoint failure reason for a polling error.
-
-    Args:
-        err: The exception raised while polling for login confirmation.
-
-    Returns:
-        ``"expired"`` for a device-code timeout, ``"denied"`` for rejected
-        credentials, ``"error"`` otherwise — the device-code page shows a
-        matching terminal message.
-    """
-    if isinstance(err, DeviceCodeTimeoutError):
-        return "expired"
-    if isinstance(err, InvalidCredentialsError):
-        return "denied"
-    return "error"

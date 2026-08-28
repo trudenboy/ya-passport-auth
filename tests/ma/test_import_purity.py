@@ -1,10 +1,11 @@
-"""The core library must not depend on the MA runtime.
+"""
+The core library must not depend on the MA runtime.
 
 ``import ya_passport_auth`` (and every non-``ma`` module) must work without
 ``music_assistant`` or even ``music_assistant_models`` installed — standalone
 consumers of the auth library must not be affected by the MA layer. The
-``ma`` modules themselves import only ``music_assistant_models`` at module
-level; the MA *server* package is imported lazily inside the flows.
+``ma`` modules themselves depend only on ``music_assistant_models`` and never
+import the MA *server* package.
 """
 
 from __future__ import annotations
@@ -55,7 +56,7 @@ def test_ma_layer_importable_without_ma_server() -> None:
     # only the *server* package must stay optional at import time.
     code = _BLOCKER.format(blocked=("music_assistant",)) + (
         "import ya_passport_auth.ma\n"
-        "from ya_passport_auth.ma import run_device_flow, CredentialCascade\n"
+        "from ya_passport_auth.ma import CredentialCascade, require_music_token\n"
         "print('ok')\n"
     )
     result = _run_isolated(code)

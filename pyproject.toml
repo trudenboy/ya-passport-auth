@@ -38,11 +38,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Music Assistant integration layer (ya_passport_auth.ma): shared device-code
-# page, login flows, credential cascade and config-entry builders for the MA
-# yandex providers. The music_assistant *server* package is expected at
-# runtime inside MA and is imported lazily; only the models package is a
-# declared dependency.
+# Music Assistant helpers (ya_passport_auth.ma): credential parsing, token
+# maintenance, silent rotation and read-only credential sharing for Yandex
+# providers. Only the models package is required.
 ma = [
     "music-assistant-models>=1.1.158",
 ]
@@ -113,12 +111,6 @@ enable_error_code = [
 module = ["aioresponses", "aioresponses.*"]
 ignore_missing_imports = true
 
-# The MA *server* package is a runtime-only host environment for the ma
-# layer — never installed in this repo's CI. Models are typed and installed.
-[[tool.mypy.overrides]]
-module = ["music_assistant.*"]
-ignore_missing_imports = true
-
 # ---------------------------------------------------------------------------
 # ruff — lint + format
 # ---------------------------------------------------------------------------
@@ -168,6 +160,9 @@ ignore = [
     "D",       # docstrings not required in tests
 ]
 "src/ya_passport_auth/_version.py" = ["D", "UP"]
+"src/ya_passport_auth/ma/__init__.py" = ["D212"]
+"src/ya_passport_auth/ma/errors.py" = ["D212"]
+"src/ya_passport_auth/ma/flow.py" = ["D212"]
 "src/ya_passport_auth/http.py" = ["PLR2004"]  # HTTP status codes are not magic
 "src/ya_passport_auth/constants.py" = ["S105"]  # public client IDs, not secrets
 "src/ya_passport_auth/flows/quasar.py" = ["S105"]  # URL, not a password
