@@ -13,11 +13,13 @@ from ya_passport_auth.credentials import (
 )
 from ya_passport_auth.exceptions import (
     AuthFailedError,
+    CredentialSourceUnavailableError,
     CsrfExtractionError,
     DeviceCodeTimeoutError,
     InvalidCredentialsError,
     LoginTimeoutError,
     NetworkError,
+    NoUsableCredentialsError,
     QRPendingError,
     QRTimeoutError,
     RateLimitedError,
@@ -27,11 +29,19 @@ from ya_passport_auth.exceptions import (
 from ya_passport_auth.flows.qr import QrSession
 from ya_passport_auth.models import AccountInfo, DeviceCodeSession, OAuthTokens
 from ya_passport_auth.oauth import OAuthDeviceClient
+from ya_passport_auth.sharing import (
+    CredentialReader,
+    ResolvedCredentials,
+    SharedTokenResolver,
+    TokenSnapshot,
+)
 
 __all__ = [
     "AccountInfo",
     "AuthFailedError",
     "ClientConfig",
+    "CredentialReader",
+    "CredentialSourceUnavailableError",
     "Credentials",
     "CsrfExtractionError",
     "DeviceCodeSession",
@@ -40,6 +50,7 @@ __all__ = [
     "LoginTimeoutError",
     "MemoryCredentialStore",
     "NetworkError",
+    "NoUsableCredentialsError",
     "OAuthDeviceClient",
     "OAuthTokens",
     "PassportClient",
@@ -47,7 +58,10 @@ __all__ = [
     "QRTimeoutError",
     "QrSession",
     "RateLimitedError",
+    "ResolvedCredentials",
     "SecretStr",
+    "SharedTokenResolver",
+    "TokenSnapshot",
     "UnexpectedHostError",
     "YaPassportError",
     "__version__",
