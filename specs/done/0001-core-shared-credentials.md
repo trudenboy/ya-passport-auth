@@ -2,7 +2,7 @@
 id: "0001"
 title: "Framework-neutral shared credentials core with setup-data-aware MA adapter"
 size: L          # S | M | L
-status: inprogress     # todo | inprogress | done
+status: done           # todo | inprogress | done
 priority: P0     # P0 | P1 | P2
 effort_minutes: 180
 feature_id:
