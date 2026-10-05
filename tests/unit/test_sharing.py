@@ -460,3 +460,24 @@ class TestMintResultValidation:
         assert "test-raw-minted-0123456789" not in repr(resolver._token_cache)
         creds = await resolver.resolve()
         assert creds.music_token == SecretStr("test-music-minted-ok")
+
+
+async def test_falsey_mint_callable_is_used_not_replaced(clock: _Clock) -> None:
+    class _FalseyMint:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def __bool__(self) -> bool:
+            return False
+
+        async def __call__(self, x_token: SecretStr) -> SecretStr:
+            self.calls += 1
+            return SecretStr("test-music-from-falsey-mint")
+
+    falsey_mint = _FalseyMint()
+    resolver = SharedTokenResolver(_MutableReader(x="test-x-1"), mint=falsey_mint, now=clock)
+
+    creds = await resolver.resolve()
+
+    assert falsey_mint.calls == 1
+    assert creds.music_token == SecretStr("test-music-from-falsey-mint")

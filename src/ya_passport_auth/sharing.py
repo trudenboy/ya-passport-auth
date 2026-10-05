@@ -147,7 +147,7 @@ class SharedTokenResolver:
         now: Callable[[], float] = time.monotonic,
     ) -> None:
         self._reader = reader
-        self._mint = mint or _passport_mint
+        self._mint = mint if mint is not None else _passport_mint
         self._ttl_s = ttl_s
         self._now = now
         self._token_cache: dict[str, _CachedToken] = {}
