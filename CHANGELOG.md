@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-10-05
+
+### Added
+
+- `SharedTokenResolver` lets any application share one Yandex account
+  read-only. One consumer rotates the tokens, the others resolve a usable music
+  token from it without Music Assistant. Implement `CredentialReader` over the
+  owner's storage. `resolve()` returns a music token and the matching x_token
+  from a single read. Minted tokens are cached in memory, and concurrent 401s
+  cause a single Passport call.
+- `NoUsableCredentialsError` and `CredentialSourceUnavailableError` exceptions.
+- `BorrowedCredentialSource.resolve_credentials()` returns a consistent music
+  token and x_token pair from one read of the linked Yandex Music instance.
+
+### Changed
+
+- The `ma` extra now requires Music Assistant 2.10.0 or newer
+  (`music-assistant-models>=1.1.204`).
+
+### Fixed
+
+- Borrowed credentials now follow the linked Yandex Music instance's setup
+  data, where Music Assistant 2.10 stores rotated tokens. Previously, an older
+  token left in the instance's configuration kept being used after rotation,
+  and tokens cleared by the owner were still borrowed.
+
 ## [2.0.1] - 2026-08-28
 
 ### Changed

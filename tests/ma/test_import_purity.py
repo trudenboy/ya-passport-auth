@@ -51,6 +51,18 @@ def test_core_importable_without_any_ma_packages() -> None:
     assert "ok" in result.stdout
 
 
+def test_sharing_core_has_no_ma_dependency() -> None:
+    code = _BLOCKER.format(blocked=("music_assistant", "music_assistant_models")) + (
+        "import sys\n"
+        "import ya_passport_auth.sharing\n"
+        "assert 'ya_passport_auth.ma' not in sys.modules, 'sharing imported the ma layer'\n"
+        "print('ok')\n"
+    )
+    result = _run_isolated(code)
+    assert result.returncode == 0, result.stderr
+    assert "ok" in result.stdout
+
+
 def test_ma_layer_importable_without_ma_server() -> None:
     # music_assistant_models is a declared dependency of the [ma] extra;
     # only the *server* package must stay optional at import time.

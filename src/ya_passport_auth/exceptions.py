@@ -23,17 +23,20 @@ exception, it cannot be re-rendered anywhere downstream.
 
 from __future__ import annotations
 
+from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
 
 from ya_passport_auth.credentials import Credentials, SecretStr
 
 __all__ = [
     "AuthFailedError",
+    "CredentialSourceUnavailableError",
     "CsrfExtractionError",
     "DeviceCodeTimeoutError",
     "InvalidCredentialsError",
     "LoginTimeoutError",
     "NetworkError",
+    "NoUsableCredentialsError",
     "QRPendingError",
     "QRTimeoutError",
     "RateLimitedError",
@@ -92,8 +95,30 @@ class UnexpectedHostError(NetworkError):
     """Response came from a host outside the allow-list."""
 
 
+class CredentialSourceUnavailableError(YaPassportError):
+    """The credential owner cannot be read right now — retry later."""
+
+
 class AuthFailedError(YaPassportError):
     """The authentication workflow failed at the application level."""
+
+
+NoUsableCredentialsReason = Literal["no_credentials", "rejected_without_x_token"]
+
+
+class NoUsableCredentialsError(AuthFailedError):
+    """The credential owner holds nothing a borrower can use.
+
+    Args:
+        message: Human-readable description; must not contain token material.
+        reason: ``"no_credentials"`` when the owner stores no tokens, or
+            ``"rejected_without_x_token"`` when its only music token was
+            rejected and there is no x_token to mint a fresh one from.
+    """
+
+    def __init__(self, message: str, *, reason: NoUsableCredentialsReason) -> None:
+        super().__init__(message)
+        self.reason: NoUsableCredentialsReason = reason
 
 
 class InvalidCredentialsError(AuthFailedError):

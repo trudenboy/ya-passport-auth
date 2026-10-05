@@ -40,9 +40,10 @@ dependencies = [
 [project.optional-dependencies]
 # Music Assistant helpers (ya_passport_auth.ma): credential parsing, token
 # maintenance, silent rotation and read-only credential sharing for Yandex
-# providers. Only the models package is required.
+# providers. Only the models package is required; the floor matches Music
+# Assistant 2.10.0, the minimum supported MA version.
 ma = [
-    "music-assistant-models>=1.1.158",
+    "music-assistant-models>=1.1.204",
 ]
 dev = [
     "pytest>=8",
@@ -58,7 +59,7 @@ dev = [
     "cyclonedx-bom>=4",
     "liccheck>=0.9",
     "pre-commit>=3.8",
-    "music-assistant-models>=1.1.158",
+    "music-assistant-models>=1.1.204",
 ]
 
 [project.urls]

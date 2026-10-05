@@ -12,6 +12,7 @@ from __future__ import annotations
 from .borrow import (
     BORROW_SOURCE_OWN,
     BorrowedCredentialSource,
+    ResolvedCredentials,
     list_yandex_music_instances,
 )
 from .cascade import CascadeHooks, CredentialCascade, KeySpec
@@ -25,6 +26,7 @@ __all__ = [
     "CascadeHooks",
     "CredentialCascade",
     "KeySpec",
+    "ResolvedCredentials",
     "list_yandex_music_instances",
     "login_with_cookies",
     "raise_mapped",
