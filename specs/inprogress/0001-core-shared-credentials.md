@@ -106,8 +106,9 @@ runtime. Hosts older than 2.10.0 stay on 2.0.x.
    states "Music Assistant 2.10.0 or newer" for the `ma` extra. The fake owner
    in `tests/ma/test_borrow.py` gains `get_setup_value` (MA contract) in place
    of `config.get_value`. The commit message explains the change (support
-   floor raised to MA 2.10.0). The test bodies and assertions of the 27
-   existing tests stay unchanged.
+   floor raised to MA 2.10.0). The test bodies of the 27 existing tests stay
+   unchanged, except two assertions on the private mint cache, which now
+   point at the core resolver. The core covers the same behaviour.
 8. Owner resolution is unchanged: exact instance via
    `get_provider(id, return_unavailable=True)`, never falling back to another
    instance. A missing owner raises `ResourceTemporarilyUnavailable`. A wrong
@@ -124,8 +125,8 @@ runtime. Hosts older than 2.10.0 stay on 2.0.x.
     - `ya_passport_auth.ma` adds `ResolvedCredentials` as a re-export;
     - no existing export is removed or renamed.
 11. Coverage stays at or above the 95% gate. `mypy --strict`, ruff and bandit
-    pass. `CHANGELOG.md` gets a `## [2.1.0]` entry under `Added`, `Changed`
-    (MA 2.10.0 minimum, models floor) and `Fixed`.
+    pass. `CHANGELOG.md` gets an `## [Unreleased]` entry (released as 2.1.0)
+    under `Added`, `Changed` (MA 2.10.0 minimum, models floor) and `Fixed`.
 
 ## Test Plan
 
@@ -250,8 +251,9 @@ Changed: `ya_passport_auth.ma.borrow`.
 - The default mint in the adapter stays `ma.tokens.refresh_music_token`,
   looked up at call time. It keeps the MA error mapping and existing test
   monkeypatching.
-- `_secret_or_none` and the cache, rejection and lock internals move to the
-  core. The adapter keeps no copies.
+- The cache, rejection and lock internals move to the core. The adapter
+  keeps no copies. `_secret_or_none` stays in the adapter as the single
+  normaliser of MA setup values; the providers' copies are deleted.
 
 Unchanged: `BORROW_SOURCE_OWN`, `list_yandex_music_instances`,
 `MUSIC_TOKEN_TTL_S` (re-exported from core), `CredentialCascade`, `tokens`,

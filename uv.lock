@@ -1,6 +1,10 @@
 version = 1
 revision = 3
 requires-python = ">=3.12"
+resolution-markers = [
+    "python_full_version >= '3.13'",
+    "python_full_version < '3.13'",
+]
 
 [[package]]
 name = "aiohappyeyeballs"
@@ -135,6 +139,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/61/62/06741b579156360248d1ec624842ad0edf697050bbaf7c3e46394e106ad1/aiosignal-1.4.0.tar.gz", hash = "sha256:f47eecd9468083c2029cc99945502cb7708b082c232f9aca65da147157b251c7", size = 25007, upload-time = "2025-07-03T22:54:43.528Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/76/641ae371508676492379f16e2fa48f4e2c11741bd63c48be4b12a6b09cba/aiosignal-1.4.0-py3-none-any.whl", hash = "sha256:053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e", size = 7490, upload-time = "2025-07-03T22:54:42.156Z" },
+]
+
+[[package]]
+name = "anyascii"
+version = "0.3.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/db/ba/edebda727008390936da4a9bf677c19cd63b32d51e864656d2cbd1028e25/anyascii-0.3.3.tar.gz", hash = "sha256:c94e9dd9d47b3d9494eca305fef9447d00b4bf1a32aff85aa746fa3ec7fb95c3", size = 264680, upload-time = "2025-06-29T03:33:30.427Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c2/76/783b75a21ce3563b8709050de030ae253853b147bd52e141edc1025aa268/anyascii-0.3.3-py3-none-any.whl", hash = "sha256:f5ab5e53c8781a36b5a40e1296a0eeda2f48c649ef10c3921c1381b1d00dee7a", size = 345090, upload-time = "2025-06-29T03:33:28.356Z" },
 ]
 
 [[package]]
@@ -1018,15 +1031,36 @@ wheels = [
 
 [[package]]
 name = "music-assistant-models"
-version = "1.1.159"
+version = "1.1.211"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version < '3.13'",
+]
 dependencies = [
+    { name = "anyascii" },
     { name = "mashumaro" },
     { name = "orjson" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7f/05/3aaba3c75c7053054fdadb08fd25b1d56c9cecd9e5f8caa8ea084fb8f22d/music_assistant_models-1.1.159.tar.gz", hash = "sha256:45068ff3d2251f7b42baf069aa5180d3c503abf4eb9af41660ced6f436ac4311", size = 68205, upload-time = "2026-07-09T07:08:01.463Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/4b/fa17193b2a3b79b182cc0d14b902e418685f4065c010b3f45c1671a7755c/music_assistant_models-1.1.211.tar.gz", hash = "sha256:10c7a164379ecb47fcc9812e7042d88381c7272fa47eebb799cf31e19f6a3a23", size = 102554, upload-time = "2026-09-12T16:55:05.454Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9a/e3/6d4394c458f2b84cedf1c80a99fa2378cc14053e3395be88769e76075a6d/music_assistant_models-1.1.159-py3-none-any.whl", hash = "sha256:f767ceca2655f6e07df064447b835cde720e4fad7a7dab1693bc61d4067163e6", size = 67542, upload-time = "2026-07-09T07:08:00.258Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/17/79af41396b85dbc40015f68b988b18bb4e30b53b101dccf6ed34f9b01edb/music_assistant_models-1.1.211-py3-none-any.whl", hash = "sha256:c8be3a3b4f68c564cc885c18cd80f3834582b4629eabea1972b203dc26d76785", size = 82640, upload-time = "2026-09-12T16:55:04.073Z" },
+]
+
+[[package]]
+name = "music-assistant-models"
+version = "1.1.214"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.13'",
+]
+dependencies = [
+    { name = "anyascii" },
+    { name = "mashumaro" },
+    { name = "orjson" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1a/3f/b544117adc4c4f110dcfd60151e2395bec70f8800bcfd8b8ab345cd5b3f6/music_assistant_models-1.1.214.tar.gz", hash = "sha256:2bbfa4b27a3cb35e86122d45c586a5399d55ee18bca0fbf9e45ea581117307d6", size = 105805, upload-time = "2026-09-28T22:01:24.134Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/36/bd/e1f38fe0155ccb815d299eafe3fa894cbea5fd6e906d1090531c4d261d59/music_assistant_models-1.1.214-py3-none-any.whl", hash = "sha256:914f09e325e20c950716a161808e48ff7d563c567f8d0576329b5ee2282448ab", size = 84090, upload-time = "2026-09-28T22:01:22.647Z" },
 ]
 
 [[package]]
@@ -1842,7 +1876,8 @@ dev = [
     { name = "cyclonedx-bom" },
     { name = "hypothesis" },
     { name = "liccheck" },
-    { name = "music-assistant-models" },
+    { name = "music-assistant-models", version = "1.1.211", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
+    { name = "music-assistant-models", version = "1.1.214", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13'" },
     { name = "mypy" },
     { name = "pip" },
     { name = "pip-audit" },
@@ -1853,7 +1888,8 @@ dev = [
     { name = "ruff" },
 ]
 ma = [
-    { name = "music-assistant-models" },
+    { name = "music-assistant-models", version = "1.1.211", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
+    { name = "music-assistant-models", version = "1.1.214", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13'" },
 ]
 
 [package.metadata]
@@ -1864,8 +1900,8 @@ requires-dist = [
     { name = "cyclonedx-bom", marker = "extra == 'dev'", specifier = ">=4" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6" },
     { name = "liccheck", marker = "extra == 'dev'", specifier = ">=0.9" },
-    { name = "music-assistant-models", marker = "extra == 'dev'", specifier = ">=1.1.158" },
-    { name = "music-assistant-models", marker = "extra == 'ma'", specifier = ">=1.1.158" },
+    { name = "music-assistant-models", marker = "extra == 'dev'", specifier = ">=1.1.204" },
+    { name = "music-assistant-models", marker = "extra == 'ma'", specifier = ">=1.1.204" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11" },
     { name = "pip", marker = "extra == 'dev'", specifier = ">=26.2" },
     { name = "pip-audit", marker = "extra == 'dev'", specifier = ">=2.7" },

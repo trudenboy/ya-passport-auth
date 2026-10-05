@@ -37,6 +37,9 @@ accounts, and cookie parsing used by the MA Yandex providers):
 pip install ya-passport-auth[ma]
 ```
 
+The `ma` extra requires Music Assistant 2.10.0 or newer
+(`music-assistant-models>=1.1.204`).
+
 ## Quick start
 
 ### QR login
@@ -130,6 +133,32 @@ async def cookie_login():
         print(f"x_token acquired, music_token ready")
 ```
 
+### Sharing one account between consumers
+
+One consumer (the owner) persists and rotates the tokens; refresh tokens are
+single-use, so nobody else may rotate them. Other consumers borrow read-only:
+they read the owner's current tokens and, when no usable music token is
+stored, mint one in memory from the x_token. Minted tokens are cached, and a
+burst of concurrent 401s causes a single Passport call. Implement
+`CredentialReader` over wherever the owner keeps its tokens:
+
+```python
+from ya_passport_auth import SecretStr, SharedTokenResolver, TokenSnapshot
+
+class KeyringReader:
+    async def read_tokens(self) -> TokenSnapshot:
+        x_token = load_x_token_from_keyring()  # your storage
+        return TokenSnapshot(music_token=None, x_token=SecretStr(x_token))
+
+resolver = SharedTokenResolver(KeyringReader())
+creds = await resolver.resolve()        # one read: music_token + matching x_token
+# after a 401 with creds.music_token:
+resolver.invalidate(creds.music_token)  # the next resolve() mints a fresh token
+```
+
+Music Assistant providers use `ya_passport_auth.ma.BorrowedCredentialSource`,
+which reads the linked Yandex Music instance's setup data.
+
 ## Architecture
 
 ```
@@ -204,8 +233,10 @@ Frozen, slotted dataclass returned by `poll_qr_until_confirmed()` and
 YaPassportError
 ├── NetworkError
 │   └── UnexpectedHostError
+├── CredentialSourceUnavailableError
 └── AuthFailedError
     ├── InvalidCredentialsError
+    ├── NoUsableCredentialsError
     ├── CsrfExtractionError
     ├── RateLimitedError
     ├── QRPendingError

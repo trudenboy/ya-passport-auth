@@ -41,6 +41,11 @@ class _Owner:
         self.type = provider_type
         self.config = _OwnerConfig(values)
 
+    def get_setup_value(self, key: str, default: object = None) -> object:
+        """MA 2.10 contract with no setup data stored: fall back to config."""
+        value = self.config.get_value(key)
+        return default if value is None else value
+
 
 class _Mass:
     def __init__(self, providers: dict[str, object] | None = None) -> None:
@@ -227,7 +232,7 @@ class TestResolveMusicToken:
         for i in range(6):
             owner.config._values["x_token"] = f"test-x-{i}"
             await source.resolve_music_token()
-        assert len(source._token_cache) <= 4
+        assert len(source._resolver._token_cache) <= 4
         # The oldest entry was evicted — resolving it again hits Passport.
         owner.config._values["x_token"] = "test-x-0"
         await source.resolve_music_token()
@@ -239,7 +244,7 @@ class TestResolveMusicToken:
         mass = _Mass({"ym-1": _Owner({"x_token": "test-x-secret-value"})})
         source = _source(mass, clock)
         await source.resolve_music_token()
-        assert "test-x-secret-value" not in source._token_cache
+        assert "test-x-secret-value" not in source._resolver._token_cache
 
     async def test_failed_mint_does_not_poison_cache(
         self, clock: _Clock, monkeypatch: pytest.MonkeyPatch
