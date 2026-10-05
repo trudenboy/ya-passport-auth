@@ -226,6 +226,10 @@ class SharedTokenResolver:
             if cached is not None:
                 return cached
             token = await self._mint(SecretStr(x_token))
+            # Validate before caching: a raw str from a custom mint must never
+            # reach the cache, whose entries repr their fields.
+            if not isinstance(token, SecretStr):
+                raise TypeError(f"mint must return a SecretStr, got {type(token).__name__}")
             self._store_cached_token(cache_key, token)
             return token
 

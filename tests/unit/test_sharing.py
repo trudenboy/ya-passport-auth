@@ -442,3 +442,21 @@ class TestContainerTypeGuards:
         assert "test-music-a" not in rendered
         assert "test-x-a" not in rendered
         assert "test-music-b" not in rendered
+
+
+class TestMintResultValidation:
+    async def test_plain_string_mint_result_is_rejected_and_not_cached(self, clock: _Clock) -> None:
+        results: list[object] = ["test-raw-minted-0123456789", SecretStr("test-music-minted-ok")]
+
+        async def mint(x_token: SecretStr) -> SecretStr:
+            return results.pop(0)  # type: ignore[return-value]
+
+        resolver = SharedTokenResolver(_MutableReader(x="test-x-1"), mint=mint, now=clock)
+
+        with pytest.raises(TypeError, match="mint must return a SecretStr") as exc:
+            await resolver.resolve()
+
+        assert "test-raw-minted-0123456789" not in str(exc.value)
+        assert "test-raw-minted-0123456789" not in repr(resolver._token_cache)
+        creds = await resolver.resolve()
+        assert creds.music_token == SecretStr("test-music-minted-ok")
