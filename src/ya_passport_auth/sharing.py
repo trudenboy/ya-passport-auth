@@ -55,6 +55,13 @@ _REJECTED_TOKENS_MAX: Final = 4
 MintMusicToken = Callable[[SecretStr], Awaitable[SecretStr]]
 
 
+def _require_optional_secret(value: object, field: str) -> None:
+    # Reject plain strings: a raw token would leak through the dataclass repr.
+    # Only the type name goes into the message, never the value.
+    if value is not None and not isinstance(value, SecretStr):
+        raise TypeError(f"{field} must be a SecretStr or None, got {type(value).__name__}")
+
+
 @dataclass(frozen=True, slots=True)
 class _CachedToken:
     """Music token entry in the in-memory cache."""
@@ -70,6 +77,10 @@ class TokenSnapshot:
     music_token: SecretStr | None
     x_token: SecretStr | None
 
+    def __post_init__(self) -> None:
+        _require_optional_secret(self.music_token, "TokenSnapshot.music_token")
+        _require_optional_secret(self.x_token, "TokenSnapshot.x_token")
+
 
 @dataclass(frozen=True, slots=True)
 class ResolvedCredentials:
@@ -77,6 +88,14 @@ class ResolvedCredentials:
 
     music_token: SecretStr
     x_token: SecretStr | None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.music_token, SecretStr):
+            raise TypeError(
+                "ResolvedCredentials.music_token must be a SecretStr, "
+                f"got {type(self.music_token).__name__}",
+            )
+        _require_optional_secret(self.x_token, "ResolvedCredentials.x_token")
 
 
 class CredentialReader(Protocol):

@@ -402,3 +402,43 @@ def test_public_exports() -> None:
     ):
         assert name in ya_passport_auth.__all__
         assert getattr(ya_passport_auth, name) is getattr(sharing, name)
+
+
+class TestContainerTypeGuards:
+    @pytest.mark.parametrize("field", ["music_token", "x_token"])
+    def test_snapshot_rejects_plain_string(self, field: str) -> None:
+        kwargs: dict[str, object] = {"music_token": None, "x_token": None}
+        kwargs[field] = "test-raw-token-0123456789"
+
+        with pytest.raises(TypeError, match=rf"TokenSnapshot\.{field} must be a SecretStr") as exc:
+            TokenSnapshot(**kwargs)  # type: ignore[arg-type]
+
+        assert "test-raw-token-0123456789" not in str(exc.value)
+
+    def test_resolved_rejects_plain_music_token(self) -> None:
+        with pytest.raises(
+            TypeError, match=r"ResolvedCredentials\.music_token must be a SecretStr"
+        ):
+            ResolvedCredentials(music_token="test-raw-music", x_token=None)  # type: ignore[arg-type]
+
+    def test_resolved_rejects_missing_music_token(self) -> None:
+        with pytest.raises(
+            TypeError, match=r"ResolvedCredentials\.music_token must be a SecretStr"
+        ):
+            ResolvedCredentials(music_token=None, x_token=None)  # type: ignore[arg-type]
+
+    def test_resolved_rejects_plain_x_token(self) -> None:
+        with pytest.raises(TypeError, match=r"ResolvedCredentials\.x_token must be a SecretStr"):
+            ResolvedCredentials(music_token=SecretStr("test-music"), x_token="test-raw-x")  # type: ignore[arg-type]
+
+    def test_repr_redacts_tokens(self) -> None:
+        snapshot = TokenSnapshot(
+            music_token=SecretStr("test-music-a"), x_token=SecretStr("test-x-a")
+        )
+        resolved = ResolvedCredentials(music_token=SecretStr("test-music-b"), x_token=None)
+
+        rendered = repr(snapshot) + repr(resolved)
+
+        assert "test-music-a" not in rendered
+        assert "test-x-a" not in rendered
+        assert "test-music-b" not in rendered
