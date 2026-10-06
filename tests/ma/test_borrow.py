@@ -400,3 +400,18 @@ class TestListInstances:
 
     def test_no_config(self) -> None:
         assert list_yandex_music_instances(object()) == []
+
+    def test_skips_disabled_instances(self) -> None:
+        class _Config:
+            @staticmethod
+            def get(key: str, default: object = None) -> object:
+                return {
+                    "ym-a": {"domain": "yandex_music", "name": "Main", "enabled": True},
+                    "ym-off": {"domain": "yandex_music", "name": "Old", "enabled": False},
+                    "ym-b": {"domain": "yandex_music"},
+                }
+
+        class _M:
+            config = _Config()
+
+        assert list_yandex_music_instances(_M()) == [("ym-a", "Main"), ("ym-b", "ym-b")]

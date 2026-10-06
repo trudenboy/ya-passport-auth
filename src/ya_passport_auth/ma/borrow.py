@@ -57,7 +57,7 @@ class _SetupValueOwner(Protocol):
 
 
 def list_yandex_music_instances(mass: object) -> list[tuple[str, str]]:
-    """List configured yandex_music provider instances.
+    """List configured, enabled yandex_music provider instances.
 
     Args:
         mass: The MusicAssistant instance (reads ``config.get("providers")``).
@@ -73,6 +73,8 @@ def list_yandex_music_instances(mass: object) -> list[tuple[str, str]]:
     raw_providers = cast("MappingProxyType[str, object]", get("providers", {}))
     for instance_id, prov_conf in raw_providers.items():
         if not isinstance(prov_conf, dict) or prov_conf.get("domain") != "yandex_music":
+            continue
+        if prov_conf.get("enabled", True) is False:
             continue
         display_name = prov_conf.get("name") or instance_id
         instances.append((str(instance_id), str(display_name)))
